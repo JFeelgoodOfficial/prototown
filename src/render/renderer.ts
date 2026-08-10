@@ -1,8 +1,8 @@
 import type { GameState, Tile, Unit } from "../engine/state";
 import { idx, cityById } from "../engine/state";
 import { tribeById } from "../data/tribes";
-import { UNITS } from "../data/units";
 import { TILE_W, TILE_H, gridToWorld, drawOrder } from "./iso";
+import { drawCharacter } from "./unitArt";
 import type { Camera } from "./camera";
 
 export interface FloatingText {
@@ -29,6 +29,9 @@ export interface ViewOptions {
   floatingTexts: FloatingText[];
   revealAll: boolean;
 }
+
+/** Fits the 100-unit-tall authored figures onto a 72x36 iso tile. */
+const UNIT_ART_SCALE = 0.62;
 
 const TERRAIN_COLORS: Record<string, [string, string]> = {
   field: ["#8fce5e", "#6da844"],
@@ -334,8 +337,8 @@ function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: numbe
 
 function drawUnit(ctx: CanvasRenderingContext2D, state: GameState, unit: Unit, wx: number, wy: number, selected: boolean, attackable: boolean): void {
   const tribe = tribeById(state.players[unit.ownerId].tribeId);
-  const uy = wy - 8;
 
+  // Rings go down first so the figure stands on top of them.
   if (selected) {
     ctx.beginPath();
     ctx.ellipse(wx, wy + 4, 18, 9, 0, 0, Math.PI * 2);
@@ -351,78 +354,15 @@ function drawUnit(ctx: CanvasRenderingContext2D, state: GameState, unit: Unit, w
     ctx.stroke();
   }
 
-  if (unit.embarked) {
-    // boat hull
-    ctx.beginPath();
-    ctx.moveTo(wx - 14, uy + 8);
-    ctx.quadraticCurveTo(wx, uy + 16, wx + 14, uy + 8);
-    ctx.lineTo(wx + 10, uy + 4);
-    ctx.lineTo(wx - 10, uy + 4);
-    ctx.closePath();
-    ctx.fillStyle = "#8a6b45";
-    ctx.fill();
-    if (unit.embarked === "ship") {
-      ctx.fillStyle = "#e8e2d6";
-      ctx.beginPath();
-      ctx.moveTo(wx, uy + 4);
-      ctx.lineTo(wx, uy - 12);
-      ctx.lineTo(wx + 10, uy - 2);
-      ctx.closePath();
-      ctx.fill();
-    }
-  }
-
-  // body: circle head + shield-ish body in tribe color
-  const shape = UNITS[unit.type];
-  const r = unit.type === "giant" ? 11 : 8;
-  ctx.beginPath();
-  ctx.ellipse(wx, uy, r, r + 2, 0, 0, Math.PI * 2);
-  ctx.fillStyle = tribe.color;
-  ctx.fill();
-  ctx.strokeStyle = tribe.colorDark;
-  ctx.lineWidth = 2;
-  ctx.stroke();
-  ctx.beginPath();
-  ctx.arc(wx, uy - r - 3, unit.type === "giant" ? 6 : 4.5, 0, Math.PI * 2);
-  ctx.fillStyle = "#f2d3b3";
-  ctx.fill();
-
-  // weapon glyph hint by range/type
-  ctx.strokeStyle = "#2c2c2c";
-  ctx.lineWidth = 2;
-  if (shape.range >= 2) {
-    ctx.beginPath();
-    ctx.arc(wx + r + 2, uy - 2, 5, -Math.PI / 2, Math.PI / 2);
-    ctx.stroke();
-  } else {
-    ctx.beginPath();
-    ctx.moveTo(wx + r + 1, uy + 4);
-    ctx.lineTo(wx + r + 6, uy - 8);
-    ctx.stroke();
-  }
-
-  if (unit.veteran) {
-    ctx.fillStyle = "#ffd75e";
-    ctx.font = "bold 10px sans-serif";
-    ctx.textAlign = "center";
-    ctx.fillText("★", wx - r - 4, uy - r);
-  }
-
-  // HP bar (only when damaged)
-  if (unit.hp < unit.maxHp) {
-    const hpw = 22;
-    const frac = unit.hp / unit.maxHp;
-    ctx.fillStyle = "rgba(0,0,0,0.55)";
-    ctx.fillRect(wx - hpw / 2, uy - r - 12, hpw, 4);
-    ctx.fillStyle = frac > 0.5 ? "#5cd65c" : frac > 0.25 ? "#e8c14d" : "#e5533d";
-    ctx.fillRect(wx - hpw / 2, uy - r - 12, hpw * frac, 4);
-  }
-
-  // dimmed if already acted (own units only get visual cue)
-  if (unit.moved && unit.attacked) {
-    ctx.beginPath();
-    ctx.ellipse(wx, uy, r + 1, r + 3, 0, 0, Math.PI * 2);
-    ctx.fillStyle = "rgba(20,25,35,0.35)";
-    ctx.fill();
-  }
+  // The character art carries the veteran star, HP bar and acted dim itself.
+  drawCharacter(ctx, {
+    tribe: tribe.id,
+    type: unit.embarked ?? unit.type,
+    x: wx,
+    y: wy + 4,
+    scale: UNIT_ART_SCALE,
+    veteran: unit.veteran,
+    acted: unit.moved && unit.attacked,
+    hpFrac: unit.hp / unit.maxHp,
+  });
 }

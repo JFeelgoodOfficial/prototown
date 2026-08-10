@@ -4,6 +4,8 @@ export interface TribeDef {
   /** primary / secondary colors used for territory, units, UI */
   color: string;
   colorDark: string;
+  /** cosmetic: two-word identity used on the tribe picker */
+  tagline: string;
   startingTech: string;
   /** terrain generation biases applied near this tribe's capital */
   forestBias: number;
@@ -18,6 +20,7 @@ export const TRIBES: TribeDef[] = [
     name: "Ashfen",
     color: "#e05c4b",
     colorDark: "#8f3527",
+    tagline: "Ember & kiln",
     startingTech: "hunting",
     forestBias: 1.5,
     mountainBias: 1,
@@ -29,6 +32,7 @@ export const TRIBES: TribeDef[] = [
     name: "Korvani",
     color: "#4b8fe0",
     colorDark: "#2b5c9e",
+    tagline: "Tide & salt",
     startingTech: "fishing",
     forestBias: 0.7,
     mountainBias: 0.8,
@@ -40,6 +44,7 @@ export const TRIBES: TribeDef[] = [
     name: "Meridia",
     color: "#e0b84b",
     colorDark: "#9e7d27",
+    tagline: "Sun & order",
     startingTech: "organization",
     forestBias: 0.8,
     mountainBias: 0.9,
@@ -51,6 +56,7 @@ export const TRIBES: TribeDef[] = [
     name: "Thornwood",
     color: "#5cb85c",
     colorDark: "#357a35",
+    tagline: "Bramble & stone",
     startingTech: "climbing",
     forestBias: 1.2,
     mountainBias: 1.5,

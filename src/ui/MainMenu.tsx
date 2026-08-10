@@ -3,6 +3,7 @@ import { useGame } from "./store";
 import type { Difficulty } from "../game/controller";
 import { hasSave } from "../game/persistence";
 import { TRIBES } from "../data/tribes";
+import UnitPortrait from "./UnitPortrait";
 import type { WinMode } from "../engine/state";
 
 export default function MainMenu() {
@@ -37,12 +38,19 @@ export default function MainMenu() {
               <button
                 key={t.id}
                 onClick={() => setTribeId(t.id)}
-                className={`rounded-lg border p-2 text-sm font-semibold transition ${
+                className={`flex flex-col items-center rounded-lg border p-2 transition ${
                   tribeId === t.id ? "border-white bg-white/10" : "border-white/10 bg-white/5 hover:bg-white/10"
                 }`}
-                style={{ color: t.color }}
               >
-                {t.name}
+                <UnitPortrait tribeId={t.id} type="warrior" width={78} height={82} />
+                <div className="text-sm font-semibold" style={{ color: t.color }}>
+                  {t.name}
+                </div>
+                <div className="text-[11px] text-white/45">{t.tagline}</div>
+                <div className="mt-1.5 flex gap-1">
+                  <Swatch color={t.color} />
+                  <Swatch color={t.colorDark} />
+                </div>
               </button>
             ))}
           </div>
@@ -96,6 +104,10 @@ export default function MainMenu() {
       </div>
     </div>
   );
+}
+
+function Swatch({ color }: { color: string }) {
+  return <span className="h-2 w-2 rounded-full ring-1 ring-black/40" style={{ background: color }} />;
 }
 
 function Section({ label, children }: { label: string; children: React.ReactNode }) {

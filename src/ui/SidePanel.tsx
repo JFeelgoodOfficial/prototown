@@ -3,6 +3,7 @@ import { HUMAN_ID } from "../game/controller";
 import { unitById, tileAt, cityById, unitAt } from "../engine/state";
 import { UNITS, NAVAL, type UnitType } from "../data/units";
 import { cityIncome, popForNextLevel, cityUnitCount, cityCapacity } from "../engine/economy";
+import UnitPortrait from "./UnitPortrait";
 import type { Action } from "../engine/actions";
 
 /** Context panel: shows the selected unit, city, or tile with its actions. */
@@ -19,11 +20,22 @@ export default function SidePanel() {
     );
     return (
       <Panel title={`${unit.embarked ? NAVAL[unit.embarked].name + " · " : ""}${def.name}${unit.veteran ? " ★" : ""}`}>
-        <div className="text-sm text-white/80">
-          HP {unit.hp}/{unit.maxHp} · ATK {def.atk} · DEF {def.def} · Range {def.range}
-        </div>
-        <div className="text-xs text-white/50">
-          {unit.moved && unit.attacked ? "Done for this turn" : unit.moved ? "Has moved" : "Ready"}
+        <div className="flex items-end gap-3">
+          <UnitPortrait
+            tribeId={s.players[unit.ownerId].tribeId}
+            type={unit.embarked ?? unit.type}
+            width={64}
+            height={68}
+            className="shrink-0"
+          />
+          <div className="min-w-0 flex-1">
+            <div className="text-sm text-white/80">
+              HP {unit.hp}/{unit.maxHp} · ATK {def.atk} · DEF {def.def} · Range {def.range}
+            </div>
+            <div className="text-xs text-white/50">
+              {unit.moved && unit.attacked ? "Done for this turn" : unit.moved ? "Has moved" : "Ready"}
+            </div>
+          </div>
         </div>
         <div className="mt-2 flex flex-wrap gap-2">
           {acts.map((a) => (
