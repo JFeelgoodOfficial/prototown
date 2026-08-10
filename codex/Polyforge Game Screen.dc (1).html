@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+  html, body { height: 100%; margin: 0; overflow: hidden; background: #0b1220; color: #e6ecf5; font-family: ui-sans-serif, system-ui, sans-serif; -webkit-user-select: none; user-select: none; }
+  a { color: #38bdf8; }
+  a:hover { color: #7dd3fc; }
+</style>
+<script src="unitart.js"></script>
+<script src="mapscene.js"></script>
+</helmet>
+
+<div style="display: flex; height: 100vh; flex-direction: column; background: #0b1220; color: #e6ecf5; font-family: ui-sans-serif, system-ui, sans-serif;">
+
+  <div style="display: flex; align-items: center; gap: 16px; border-bottom: 1px solid rgba(255,255,255,0.1); background: #101a2c; padding: 8px 16px; font-size: 14px; line-height: 20px;">
+    <span style="font-weight: 700; color: {{ tribeColor }}">{{ tribeName }}</span>
+    <span title="Stars (income per turn)">⭐ 12 <span style="color: rgba(255,255,255,0.5);">(+4)</span></span>
+    <span title="Score">🏆 1640</span>
+    <span style="color: rgba(255,255,255,0.6);">Turn 9</span>
+    <div style="margin-left: auto; display: flex; align-items: center; gap: 8px;">
+      <button style="border-radius: 4px; background: rgba(255,255,255,0.1); padding: 6px 12px; font-weight: 600; font-size: 14px; color: inherit; border: 0; cursor: pointer;" style-hover="background: rgba(255,255,255,0.2)">Research</button>
+      <button style="border-radius: 4px; background: #059669; padding: 6px 16px; font-weight: 700; font-size: 14px; color: inherit; border: 0; cursor: pointer;" style-hover="background: #10b981">End turn</button>
+      <button title="How to play" style="border-radius: 4px; background: rgba(255,255,255,0.1); padding: 6px 12px; font-size: 14px; color: inherit; border: 0; cursor: pointer;" style-hover="background: rgba(255,255,255,0.2)">?</button>
+      <button title="Back to menu (game is autosaved)" style="border-radius: 4px; background: rgba(255,255,255,0.1); padding: 6px 12px; font-size: 14px; color: inherit; border: 0; cursor: pointer;" style-hover="background: rgba(255,255,255,0.2)">Menu</button>
+    </div>
+  </div>
+
+  <div style="position: relative; min-height: 0; flex: 1;">
+    <canvas ref="{{ canvasRef }}" onClick="{{ onCanvasClick }}" onMouseMove="{{ onCanvasMove }}" style="position: absolute; inset: 0; cursor: pointer; width: 100%; height: 100%;"></canvas>
+
+    <div style="position: absolute; top: 12px; left: 12px; display: flex; gap: 6px; align-items: center; border-radius: 12px; border: 1px solid rgba(255,255,255,0.15); background: rgba(15,24,40,0.95); padding: 8px 10px; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.4);">
+      <span style="font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: rgba(255,255,255,0.5); margin-right: 2px;">Tribe</span>
+      <sc-for list="{{ tribeChoices }}" as="t" hint-placeholder-count="4">
+        <button onClick="{{ t.pick }}" style="border-radius: 4px; border: 1px solid {{ t.border }}; background: {{ t.bg }}; color: {{ t.color }}; padding: 4px 10px; font-size: 13px; font-weight: 600; cursor: pointer;">{{ t.name }}</button>
+      </sc-for>
+    </div>
+
+    <div style="position: absolute; bottom: 12px; left: 12px; width: min(340px, 90vw); border-radius: 12px; border: 1px solid rgba(255,255,255,0.15); background: rgba(15,24,40,0.95); padding: 12px; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.45);">
+      <div style="margin-bottom: 4px; font-weight: 700;">{{ panelTitle }}</div>
+      <div style="font-size: 14px; line-height: 20px; color: rgba(255,255,255,0.8);">{{ panelStats }}</div>
+      <div style="font-size: 12px; line-height: 16px; color: rgba(255,255,255,0.5);">{{ panelSub }}</div>
+      <sc-if value="{{ showTrainLabel }}" hint-placeholder-val="{{ true }}">
+        <div style="margin-top: 8px; margin-bottom: 4px; font-size: 12px; font-weight: 600; text-transform: uppercase; color: rgba(255,255,255,0.5);">Train unit</div>
+      </sc-if>
+      <div style="margin-top: 8px; display: flex; flex-wrap: wrap; gap: 8px;">
+        <sc-for list="{{ panelActions }}" as="a" hint-placeholder-count="3">
+          <button style="border-radius: 4px; background: #0284c7; padding: 6px 12px; font-size: 14px; font-weight: 600; color: #e6ecf5; border: 0; cursor: pointer;" style-hover="background: #0ea5e9">{{ a.label }}</button>
+        </sc-for>
+      </div>
+    </div>
+
+    <div style="position: absolute; bottom: 12px; right: 12px; width: 236px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.15); background: rgba(15,24,40,0.95); padding: 12px; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.45);">
+      <div style="margin-bottom: 6px; font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: rgba(255,255,255,0.5);">Selected portrait</div>
+      <canvas ref="{{ portraitRef }}" width="424" height="300" style="width: 212px; height: 150px; display: block;"></canvas>
+      <div style="font-size: 12px; line-height: 16px; color: rgba(255,255,255,0.5);">{{ portraitCaption }}</div>
+    </div>
+  </div>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;tribe&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;ashfen&quot;,&quot;korvani&quot;,&quot;meridia&quot;,&quot;thornwood&quot;],&quot;default&quot;:&quot;ashfen&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Match&quot;},&quot;rival&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;ashfen&quot;,&quot;korvani&quot;,&quot;meridia&quot;,&quot;thornwood&quot;],&quot;default&quot;:&quot;korvani&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Match&quot;}}">
+const ACTIONS = {
+  warrior: ["Recover", "Disband"],
+  archer: ["Recover", "Disband"],
+  defender: ["Recover", "Disband"],
+  swordsman: ["Recover", "Disband"],
+  rider: ["Recover", "Disband"],
+  knight: ["Recover", "Disband"],
+  catapult: ["Recover", "Disband"],
+  giant: ["Recover", "Disband"],
+  raft: ["Upgrade to Ship (⭐5)", "Disband"],
+  ship: ["Recover", "Disband"],
+};
+
+const TRAINS = [
+  { label: "Warrior (⭐2)" }, { label: "Rider (⭐3)" }, { label: "Archer (⭐3)" },
+  { label: "Defender (⭐3)" }, { label: "Swordsman (⭐5)" },
+];
+
+class Component extends DCLogic {
+  state = { tribeId: null, selectedId: 4, hoverTile: null };
+
+  get tribeId() { return this.state.tribeId || this.props.tribe || "ashfen"; }
+  get rivalId() {
+    const r = this.props.rival || "korvani";
+    return r === this.tribeId ? (r === "korvani" ? "meridia" : "korvani") : r;
+  }
+
+  componentDidMount() {
+    this.canvas = null;
+    this.loop = () => { this.paint(); this.raf = requestAnimationFrame(this.loop); };
+    this.raf = requestAnimationFrame(this.loop);
+  }
+  componentWillUnmount() { cancelAnimationFrame(this.raf); }
+
+  sized(cv) {
+    const dpr = window.devicePixelRatio || 1;
+    const r = cv.getBoundingClientRect();
+    if (cv.width !== Math.round(r.width * dpr) || cv.height !== Math.round(r.height * dpr)) {
+      cv.width = Math.round(r.width * dpr);
+      cv.height = Math.round(r.height * dpr);
+    }
+    return { dpr, w: r.width, h: r.height };
+  }
+
+  paint() {
+    const S = window.PolyforgeScene, A = window.PolyforgeArt;
+    if (!S || !A || !this.canvas) return;
+    const cv = this.canvas;
+    const { dpr, w, h } = this.sized(cv);
+    const ctx = cv.getContext("2d");
+    ctx.save();
+    ctx.scale(dpr, dpr);
+    const sel = S.UNITS.find((u) => u.id === this.state.selectedId);
+    this.view = { width: w, height: h, zoom: Math.min(1.15, Math.max(0.62, Math.min(w / 760, h / 480))) };
+    S.render(ctx, Object.assign({
+      tribeId: this.tribeId,
+      enemyTribeId: this.rivalId,
+      selectedId: this.state.selectedId,
+      hoverTile: this.state.hoverTile,
+      reachable: sel && sel.mine ? S.neighbors(sel) : [],
+    }, this.view));
+    ctx.restore();
+
+    if (this.portrait) {
+      const p = this.portrait;
+      const ctx2 = p.getContext("2d");
+      ctx2.clearRect(0, 0, p.width, p.height);
+      ctx2.save();
+      ctx2.scale(2, 2);
+      ctx2.fillStyle = "rgba(255,255,255,0.03)";
+      ctx2.fillRect(0, 0, 212, 150);
+      const u = sel;
+      A.drawCharacter(ctx2, {
+        tribe: u && !u.mine ? this.rivalId : this.tribeId,
+        type: u ? u.type : "warrior",
+        x: 106, y: 136, scale: 1.25,
+        veteran: u ? !!u.veteran : false,
+        hpFrac: u ? u.hp / u.maxHp : 1,
+      });
+      ctx2.restore();
+    }
+  }
+
+  pickAt(e) {
+    const S = window.PolyforgeScene;
+    if (!S || !this.canvas || !this.view) return null;
+    const r = this.canvas.getBoundingClientRect();
+    return S.pick(e.clientX - r.left, e.clientY - r.top, this.view);
+  }
+
+  renderVals() {
+    const A = window.PolyforgeArt;
+    const S = window.PolyforgeScene;
+    const tribes = A ? A.TRIBES : [];
+    const tribe = tribes.find((t) => t.id === this.tribeId) || tribes[0] || { name: "", color: "#fff" };
+    const sel = S ? S.UNITS.find((u) => u.id === this.state.selectedId) : null;
+
+    let panelTitle = "Emberhold (capital) — level 4";
+    let panelStats = "Growth 3/6 · Income ⭐4 · Units 4/5 · Walls · Workshop";
+    let panelSub = "";
+    let actions = TRAINS;
+    let showTrainLabel = true;
+    let caption = "Click any figure on the map";
+
+    if (sel) {
+      const def = A.UNITS[sel.type];
+      const naval = sel.type === "raft" ? { name: "Raft", atk: 1, def: 1, range: 2 } : sel.type === "ship" ? { name: "Ship", atk: 2, def: 2, range: 2 } : null;
+      const name = naval ? naval.name + " · " + (sel.base === "archer" ? "Archer" : "Warrior") : def.name;
+      panelTitle = name + (sel.veteran ? " ★" : "");
+      const st = naval || def;
+      panelStats = "HP " + sel.hp + "/" + sel.maxHp + " · ATK " + st.atk + " · DEF " + st.def + " · Range " + st.range;
+      panelSub = sel.acted ? "Done for this turn" : "Ready";
+      actions = (ACTIONS[sel.type] || ["Disband"]).map((l) => ({ label: l }));
+      showTrainLabel = false;
+      caption = (sel.mine ? tribe.name : (tribes.find((t) => t.id === this.rivalId) || {}).name) + " " + name.toLowerCase();
+    }
+
+    return {
+      tribeName: tribe.name,
+      tribeColor: tribe.color,
+      canvasRef: (el) => { this.canvas = el; },
+      portraitRef: (el) => { this.portrait = el; },
+      onCanvasClick: (e) => {
+        const hit = this.pickAt(e);
+        if (!hit) return;
+        this.setState({ selectedId: hit.unit ? hit.unit.id : null });
+      },
+      onCanvasMove: (e) => {
+        const hit = this.pickAt(e);
+        const t = hit && hit.tile;
+        const cur = this.state.hoverTile;
+        if ((t ? t.join() : "") !== (cur ? cur.join() : "")) this.setState({ hoverTile: t });
+      },
+      tribeChoices: tribes.map((t) => ({
+        id: t.id,
+        name: t.name,
+        color: t.color,
+        bg: t.id === this.tribeId ? "rgba(255,255,255,0.12)" : "rgba(255,255,255,0.05)",
+        border: t.id === this.tribeId ? "#ffffff" : "rgba(255,255,255,0.1)",
+        pick: () => this.setState({ tribeId: t.id }),
+      })),
+      panelTitle, panelStats, panelSub,
+      panelActions: actions,
+      showTrainLabel,
+      portraitCaption: caption,
+    };
+  }
+}
+
+</script>
+</body>
+</html>
