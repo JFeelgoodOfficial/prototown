@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<link rel="stylesheet" href="_ds/industry-05a0cf1d-a44b-4e63-b5df-1bdd4a38f1aa/styles.css">
+<script src="unitart.js"></script>
+<style>
+  body { margin: 0; }
+  a { color: var(--color-accent-700); }
+  a:hover { color: var(--color-accent-900); }
+</style>
+</helmet>
+
+<div style="background: var(--color-bg); color: var(--color-text); font-family: var(--font-body); padding: 0 0 68px; min-width: 1280px;">
+
+  <div style="display: flex; align-items: baseline; gap: var(--space-6); border-bottom: 1px solid var(--color-divider); padding: var(--space-4) var(--space-8);">
+    <span style="font-family: var(--font-heading); font-size: 22px; letter-spacing: -0.01em;">POLYFORGE</span>
+    <span style="font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--color-neutral-600);">Unit &amp; tribe identity sheet</span>
+    <span style="margin-left: auto; font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--color-neutral-600);">Sheet 01 / rev A</span>
+  </div>
+
+  <div style="display: grid; grid-template-columns: 1.15fr 1fr; gap: var(--space-8); padding: var(--space-8) var(--space-8) var(--space-6);">
+    <div>
+      <h1 style="margin-bottom: var(--space-3);">Eight soldiers, four tribes,<br>thirty-two silhouettes.</h1>
+      <p style="max-width: 62ch; color: var(--color-neutral-800);">Every unit in Polyforge is drawn procedurally on the isometric canvas — no imported assets. This sheet fixes a distinct character build per unit type, then varies it across the four tribes on six axes so a player can read <em>who</em> and <em>whose</em> from silhouette alone at map scale.</p>
+    </div>
+    <div class="blueprint" style="padding: var(--space-4) var(--space-6);">
+      <i class="corner tl"></i><i class="corner tr"></i><i class="corner bl"></i><i class="corner br"></i>
+      <h6 style="margin-bottom: var(--space-2); color: var(--color-neutral-700);">Axes of tribal variation</h6>
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-1) var(--space-6); font-size: 14px;">
+        <div>01 &nbsp;Headgear silhouette</div>
+        <div>04 &nbsp;Stance &amp; body mass</div>
+        <div>02 &nbsp;Shield shape</div>
+        <div>05 &nbsp;Crest emblem</div>
+        <div>03 &nbsp;Weapon styling</div>
+        <div>06 &nbsp;Terrain accent</div>
+      </div>
+    </div>
+  </div>
+
+  <div style="padding: 0 var(--space-8) var(--space-8);">
+    <h6 style="color: var(--color-neutral-700); margin-bottom: var(--space-3);">Plate A — one unit, four tribes: the Warrior read across</h6>
+    <div class="blueprint" style="display: grid; grid-template-columns: repeat(4, 1fr); background: var(--color-neutral-100);">
+      <i class="corner tl"></i><i class="corner tr"></i><i class="corner bl"></i><i class="corner br"></i>
+      <sc-for list="{{ tribes }}" as="t" hint-placeholder-count="4">
+        <div style="border-right: 1px solid var(--color-divider); padding: var(--space-4) var(--space-3) var(--space-3); text-align: center;">
+          <canvas data-tribe="{{ t.id }}" data-type="warrior" data-scale="2.5" width="480" height="460" style="width: 240px; height: 230px;"></canvas>
+          <div style="font-family: var(--font-heading); font-size: 20px;">{{ t.name }}</div>
+          <div style="font-size: 12px; color: var(--color-neutral-700);">{{ t.tagline }}</div>
+        </div>
+      </sc-for>
+    </div>
+  </div>
+
+  <sc-for list="{{ tribes }}" as="t" hint-placeholder-count="4">
+    <div style="padding: var(--space-8) var(--space-8) 0;">
+      <div style="display: flex; align-items: flex-end; gap: var(--space-4); border-bottom: 2px solid var(--color-text); padding-bottom: var(--space-2); margin-bottom: var(--space-6);">
+        <span style="width: 26px; height: 26px; background: {{ t.color }}; display: inline-block;"></span>
+        <h2 style="margin: 0;">{{ t.name }}</h2>
+        <span style="font-family: var(--font-heading); font-size: 18px; color: var(--color-neutral-600);">{{ t.tagline }}</span>
+        <span style="margin-left: auto; font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--color-neutral-600);">{{ t.hex }}</span>
+      </div>
+
+      <div style="display: grid; grid-template-columns: 300px 1fr; gap: var(--space-8); align-items: start;">
+        <div style="display: flex; flex-direction: column; gap: var(--space-4);">
+          <div class="blueprint" style="padding: var(--space-4);">
+            <i class="corner tl"></i><i class="corner tr"></i><i class="corner bl"></i><i class="corner br"></i>
+            <h6 style="color: var(--color-neutral-700); margin-bottom: var(--space-2);">Identity kit</h6>
+            <div style="display: grid; grid-template-columns: 68px 1fr; gap: var(--space-2) var(--space-3); font-size: 13.5px; line-height: 1.4;">
+              <div style="color: var(--color-neutral-600);">Head</div><div>{{ t.head }}</div>
+              <div style="color: var(--color-neutral-600);">Shield</div><div>{{ t.shield }}</div>
+              <div style="color: var(--color-neutral-600);">Weapon</div><div>{{ t.weapon }}</div>
+              <div style="color: var(--color-neutral-600);">Stance</div><div>{{ t.stance }}</div>
+              <div style="color: var(--color-neutral-600);">Crest</div><div>{{ t.crest }}</div>
+              <div style="color: var(--color-neutral-600);">Accent</div><div>{{ t.accent }}</div>
+            </div>
+          </div>
+          <div class="blueprint" style="padding: var(--space-4);">
+            <i class="corner tl"></i><i class="corner tr"></i><i class="corner bl"></i><i class="corner br"></i>
+            <h6 style="color: var(--color-neutral-700); margin-bottom: var(--space-2);">Palette</h6>
+            <div style="display: flex; gap: 0;">
+              <div style="flex: 1; height: 46px; background: {{ t.color }};"></div>
+              <div style="flex: 1; height: 46px; background: {{ t.colorDark }};"></div>
+              <div style="flex: 1; height: 46px; background: {{ t.trim }};"></div>
+              <div style="flex: 1; height: 46px; background: {{ t.cloth }};"></div>
+              <div style="flex: 1; height: 46px; background: {{ t.metal }};"></div>
+            </div>
+            <div style="display: flex; gap: 0; font-size: 10.5px; color: var(--color-neutral-600); letter-spacing: 0.04em; margin-top: var(--space-1);">
+              <div style="flex: 1;">BASE</div><div style="flex: 1;">DARK</div><div style="flex: 1;">TRIM</div><div style="flex: 1;">CLOTH</div><div style="flex: 1;">METAL</div>
+            </div>
+          </div>
+          <div class="blueprint" style="padding: var(--space-4);">
+            <i class="corner tl"></i><i class="corner tr"></i><i class="corner bl"></i><i class="corner br"></i>
+            <h6 style="color: var(--color-neutral-700); margin-bottom: var(--space-2);">States</h6>
+            <div style="display: grid; grid-template-columns: repeat(3, 1fr); text-align: center;">
+              <div>
+                <canvas data-tribe="{{ t.id }}" data-type="swordsman" data-scale="0.85" data-veteran="1" width="264" height="225" style="width: 88px; height: 75px;"></canvas>
+                <div style="font-size: 11px; color: var(--color-neutral-700);">Veteran ★</div>
+              </div>
+              <div>
+                <canvas data-tribe="{{ t.id }}" data-type="swordsman" data-scale="0.85" data-hp="0.35" width="264" height="225" style="width: 88px; height: 75px;"></canvas>
+                <div style="font-size: 11px; color: var(--color-neutral-700);">Damaged</div>
+              </div>
+              <div>
+                <canvas data-tribe="{{ t.id }}" data-type="swordsman" data-scale="0.85" data-acted="1" width="264" height="225" style="width: 88px; height: 75px;"></canvas>
+                <div style="font-size: 11px; color: var(--color-neutral-700);">Acted</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div style="display: grid; grid-template-columns: repeat(5, 1fr); border-top: 1px solid var(--color-divider); border-left: 1px solid var(--color-divider);">
+          <sc-for list="{{ t.units }}" as="u" hint-placeholder-count="10">
+            <div style="border-right: 1px solid var(--color-divider); border-bottom: 1px solid var(--color-divider); padding: var(--space-3) var(--space-2) var(--space-2); text-align: center; background: var(--color-neutral-100);">
+              <canvas data-tribe="{{ t.id }}" data-type="{{ u.type }}" data-scale="1.8" width="352" height="306" style="width: 176px; height: 153px;"></canvas>
+              <div style="font-family: var(--font-heading); font-size: 19px; line-height: 1;">{{ u.name }}</div>
+              <div style="font-size: 11.5px; color: var(--color-neutral-700); letter-spacing: 0.03em;">{{ u.stats }}</div>
+              <div style="font-size: 11.5px; color: var(--color-accent-700); margin-top: 2px;">{{ u.note }}</div>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+    </div>
+  </sc-for>
+
+  <div style="padding: var(--space-8) var(--space-8) 0;">
+    <div class="blueprint" style="padding: var(--space-6); display: grid; grid-template-columns: 1fr 1fr 1fr; gap: var(--space-8);">
+      <i class="corner tl"></i><i class="corner tr"></i><i class="corner bl"></i><i class="corner br"></i>
+      <div>
+        <h6 style="color: var(--color-neutral-700);">Reading the map</h6>
+        <p style="font-size: 14px; margin: 0;">Silhouette carries the unit, color and headgear carry the tribe. At the map's 72×36 tile the head shape and weapon angle survive; interior detail does not, so every kit puts its identity above the shoulders and out at the weapon tip.</p>
+      </div>
+      <div>
+        <h6 style="color: var(--color-neutral-700);">Held constant</h6>
+        <p style="font-size: 14px; margin: 0;">Ground shadow, ink outline weight, veteran star, damage bar and the acted-dim overlay are shared across all thirty-two builds, so state reads identically whoever you play.</p>
+      </div>
+      <div>
+        <h6 style="color: var(--color-neutral-700);">In engine</h6>
+        <p style="font-size: 14px; margin: 0;">All builds live in one drawing module keyed by tribe kit × unit type, called where <code>drawUnit()</code> in <code>src/render/renderer.ts</code> draws its circle-and-head placeholder today. See <a href="Polyforge Game Screen.dc.html">the game screen</a> for it in situ.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+const TRIBE_COPY = {
+  ashfen: {
+    tagline: "Ember & kiln",
+    head: "Flared kiln-hood with side horns and a burning crest plume",
+    shield: "Teardrop, flame-notched rim, hot inner core",
+    weapon: "Blackened, notched iron with an ember line down the fuller",
+    stance: "Forward lean — always advancing",
+    crest: "Flame diamond",
+    accent: "Drifting embers rising off the shoulder",
+    trim: "#f0a24b", cloth: "#c2452f", metal: "#4a4442",
+  },
+  korvani: {
+    tagline: "Tide & salt",
+    head: "Conical diving helm, dorsal fin, cheek fins, glass port",
+    shield: "Round, scalloped wave lines, boss at centre",
+    weapon: "Hooked and barbed — harpoon geometry, salt-bright steel",
+    stance: "Wide braced crouch, as if on a deck",
+    crest: "Twin wave chevrons",
+    accent: "Spray droplets",
+    trim: "#8fdff0", cloth: "#3b6fb5", metal: "#5e6f7e",
+  },
+  meridia: {
+    tagline: "Sun & order",
+    head: "Parade helm with transverse crest and a sun disc",
+    shield: "Rectangular tower shield, eight-ray sunburst",
+    weapon: "Straight, polished, symmetrical — drill-issue",
+    stance: "Upright, squared, disciplined",
+    crest: "Rayed sun disc",
+    accent: "Gold motes",
+    trim: "#ffe9a8", cloth: "#c9992f", metal: "#d9c079",
+  },
+  thornwood: {
+    tagline: "Bramble & stone",
+    head: "Antlered bark hood over a carved leaf mask",
+    shield: "Lashed bark planks, pointed foot, green bindings",
+    weapon: "Wood and knapped stone, thorn-lashed along the haft",
+    stance: "Low crouch, weight back",
+    crest: "Thorn sprig",
+    accent: "A drifting leaf",
+    trim: "#a8dc7a", cloth: "#3f7a3f", metal: "#6d5c40",
+  },
+};
+
+const NOTES = {
+  warrior: "Baseline build",
+  rider: "Lean mount, no barding",
+  archer: "Cloak + quiver, light frame",
+  defender: "Widest silhouette, biggest shield",
+  swordsman: "Two-handed blade, mail skirt",
+  catapult: "Machine + one crew, tribe banner",
+  knight: "Barded charger, couched lance",
+  giant: "1.5× mass, tribe maul",
+  raft: "Lashed logs, punt pole",
+  ship: "Crested sail, prow",
+};
+
+const ORDER = ["warrior", "rider", "archer", "defender", "swordsman", "catapult", "knight", "giant", "raft", "ship"];
+
+class Component extends DCLogic {
+  renderVals() {
+    const A = window.PolyforgeArt;
+    const tribes = (A ? A.TRIBES : []).map((t) => {
+      const c = TRIBE_COPY[t.id];
+      return Object.assign({}, t, c, {
+        hex: t.color.toUpperCase() + " / " + t.colorDark.toUpperCase(),
+        units: ORDER.map((type) => {
+          const d = A.UNITS[type];
+          return {
+            type,
+            name: d ? d.name : type === "raft" ? "Raft" : "Ship",
+            stats: d
+              ? "ATK " + d.atk + " · DEF " + d.def + " · MOV " + d.mov + " · HP " + d.hp
+              : type === "raft" ? "ATK 1 · DEF 1 · MOV 2 · RNG 2" : "ATK 2 · DEF 2 · MOV 3 · RNG 2",
+            note: NOTES[type],
+          };
+        }),
+      });
+    });
+    return { tribes };
+  }
+
+  componentDidMount() { this.paint(); }
+  componentDidUpdate() { this.paint(); }
+
+  paint() {
+    const A = window.PolyforgeArt;
+    if (!A) { setTimeout(() => this.paint(), 60); return; }
+    const root = document;
+    root.querySelectorAll("canvas[data-type]").forEach((cv) => {
+      if (cv.dataset.painted === "1") return;
+      cv.dataset.painted = "1";
+      const ctx = cv.getContext("2d");
+      ctx.clearRect(0, 0, cv.width, cv.height);
+      const dpr = cv.width / parseFloat(cv.style.width || cv.width);
+      ctx.save();
+      ctx.scale(dpr, dpr);
+      const w = cv.width / dpr, h = cv.height / dpr;
+      // baseline
+      ctx.strokeStyle = "rgba(89,128,166,0.35)";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(8, h - 22); ctx.lineTo(w - 8, h - 22);
+      ctx.stroke();
+      A.drawCharacter(ctx, {
+        tribe: cv.dataset.tribe,
+        type: cv.dataset.type,
+        x: w / 2,
+        y: h - 22,
+        scale: parseFloat(cv.dataset.scale || "1") * (cv.dataset.type === "giant" ? 0.62 : cv.dataset.type === "knight" || cv.dataset.type === "catapult" || cv.dataset.type === "ship" ? 0.82 : 1),
+        veteran: cv.dataset.veteran === "1",
+        acted: cv.dataset.acted === "1",
+        hpFrac: cv.dataset.hp ? parseFloat(cv.dataset.hp) : null,
+      });
+      ctx.restore();
+    });
+  }
+}
+
+</script>
+</body>
+</html>
