@@ -19,7 +19,7 @@ export default function TopBar() {
   const endTurn = game.legal.find((a) => a.type === "END_TURN");
 
   return (
-    <div className="flex items-center gap-4 border-b border-white/10 bg-[#101a2c] px-4 py-2 text-sm">
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-white/10 bg-[#101a2c] px-2 py-1.5 text-xs sm:gap-x-4 sm:px-4 sm:py-2 sm:text-sm">
       <span className="font-bold" style={{ color: tribe.color }}>
         {tribe.name}
       </span>
@@ -31,29 +31,29 @@ export default function TopBar() {
         Turn {s.turn}
         {s.winMode === "perfection" ? ` / ${s.maxTurns}` : ""}
       </span>
-      <div className="ml-auto flex items-center gap-2">
+      <div className="ml-auto flex items-center gap-1.5 sm:gap-2">
         <button
-          className="rounded bg-white/10 px-3 py-1.5 font-semibold hover:bg-white/20"
+          className="rounded bg-white/10 px-2 py-1.5 font-semibold hover:bg-white/20 sm:px-3"
           onClick={() => setTechOpen(true)}
         >
           Research
         </button>
         <button
-          className="rounded bg-emerald-600 px-4 py-1.5 font-bold hover:bg-emerald-500 disabled:opacity-40"
+          className="rounded bg-emerald-600 px-3 py-1.5 font-bold hover:bg-emerald-500 disabled:opacity-40 sm:px-4"
           disabled={!endTurn || game.aiBusy}
           onClick={() => endTurn && game.dispatch(endTurn)}
         >
           End turn
         </button>
         <button
-          className="rounded bg-white/10 px-3 py-1.5 hover:bg-white/20"
+          className="rounded bg-white/10 px-2 py-1.5 hover:bg-white/20 sm:px-3"
           onClick={() => setHelpOpen(true)}
           title="How to play"
         >
           ?
         </button>
         <button
-          className="rounded bg-white/10 px-3 py-1.5 hover:bg-white/20"
+          className="rounded bg-white/10 px-2 py-1.5 hover:bg-white/20 sm:px-3"
           onClick={() => game.backToMenu()}
           title="Back to menu (game is autosaved)"
         >
