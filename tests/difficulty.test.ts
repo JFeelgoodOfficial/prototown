@@ -11,8 +11,15 @@ describe("difficulty", () => {
     }
   });
 
-  it("normal is the neutral baseline", () => {
-    expect(DIFFICULTY_PERSONALITY.normal).toEqual({ aggression: 1, expansion: 1, economy: 1, research: 1 });
+  it("normal weights everything neutrally", () => {
+    const { aggression, expansion, economy, research } = DIFFICULTY_PERSONALITY.normal;
+    expect({ aggression, expansion, economy, research }).toEqual({ aggression: 1, expansion: 1, economy: 1, research: 1 });
+  });
+
+  it("thinks further ahead the harder it gets", () => {
+    expect(DIFFICULTY_PERSONALITY.relaxed.lookahead).toBe(0);
+    expect(DIFFICULTY_PERSONALITY.hard.lookahead).toBeGreaterThan(DIFFICULTY_PERSONALITY.normal.lookahead);
+    expect(DIFFICULTY_PERSONALITY.normal.lookahead).toBeGreaterThan(DIFFICULTY_PERSONALITY.relaxed.lookahead);
   });
 
   it("recognises its own names and nothing else", () => {

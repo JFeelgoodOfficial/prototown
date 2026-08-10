@@ -26,13 +26,27 @@ export function serialize(state: GameState, savedAt: number, difficulty: string)
   return JSON.stringify(file);
 }
 
+/**
+ * Fill in fields added after a save was written. Only defaults are applied —
+ * a game saved before ruins existed simply has none, and its score graph
+ * starts from the turn it was loaded.
+ */
+function normalize(state: GameState): GameState {
+  if (!Array.isArray(state.scoreHistory)) state.scoreHistory = [];
+  if (state.lastRuinReward === undefined) state.lastRuinReward = null;
+  for (const tile of state.tiles) {
+    if (tile.ruin === undefined) tile.ruin = false;
+  }
+  return state;
+}
+
 export function deserialize(json: string): LoadedSave | null {
   try {
     const file = JSON.parse(json) as Partial<SaveFile>;
     if (typeof file.version !== "number" || file.version < 1 || file.version > SAVE_VERSION) return null;
     if (!file.state || !Array.isArray(file.state.tiles)) return null;
     return {
-      state: file.state,
+      state: normalize(file.state),
       savedAt: typeof file.savedAt === "number" ? file.savedAt : 0,
       difficulty: typeof file.difficulty === "string" ? file.difficulty : null,
       aggression: typeof file.aggression === "number" ? file.aggression : null,

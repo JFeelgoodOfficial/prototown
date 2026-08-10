@@ -16,9 +16,51 @@ export interface AiPersonality {
   economy: number;
   /** multiplies research */
   research: number;
+  /**
+   * How many of the best-looking actions get played out and judged by the
+   * resulting position. 0 keeps the agent purely greedy.
+   */
+  lookahead: number;
 }
 
-export const BALANCED: AiPersonality = { aggression: 1, expansion: 1, economy: 1, research: 1 };
+export const BALANCED: AiPersonality = { aggression: 1, expansion: 1, economy: 1, research: 1, lookahead: 3 };
+
+/**
+ * Static worth of a position to one player: what they hold, what it is worth
+ * militarily, and how exposed it is. Used to judge candidate actions by their
+ * outcome rather than by the action alone.
+ */
+export function evaluatePosition(state: GameState, playerId: number): number {
+  let value = 0;
+
+  for (const c of state.cities) {
+    const mine = c.ownerId === playerId;
+    const worth = 120 + c.level * 40 + (c.isCapital ? 60 : 0);
+    value += mine ? worth : -worth * 0.7;
+  }
+
+  for (const u of state.units) {
+    const def = UNITS[u.type];
+    const health = u.hp / u.maxHp;
+    const worth = (12 + def.cost * 6) * (0.5 + 0.5 * health);
+    value += u.ownerId === playerId ? worth : -worth * 0.8;
+  }
+
+  const player = playerById(state, playerId);
+  value += player.stars * 1.5;
+  for (const techId of player.techs) value += TECH_BY_ID[techId].tier * 8;
+
+  // Standing next to a village or an enemy city is worth something on its own:
+  // it is a capture waiting to happen.
+  for (const u of unitsOf(state, playerId)) {
+    const tile = tileAt(state, u.x, u.y);
+    if (tile.village) value += 70;
+    if (tile.cityHere !== null && cityById(state, tile.cityHere)?.ownerId !== playerId) value += 90;
+    if (tile.ruin) value += 40;
+  }
+
+  return value;
+}
 
 interface Objective {
   x: number;

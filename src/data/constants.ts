@@ -51,3 +51,10 @@ export const REWARD_STARS_AMOUNT = 5;
 export const REWARD_POPULATION_AMOUNT = 3;
 
 export const CITY_UNIT_CAPACITY_BASE = 1; // capacity = level + 1
+
+// Ruins: one per ~45 tiles, claimed by walking a unit in
+export const RUIN_TILES_PER = 45;
+export const RUIN_STARS = 8;
+export const RUIN_POPULATION = 2;
+/** radius of map revealed by a cartographer's ruin */
+export const RUIN_MAP_RADIUS = 3;

@@ -237,6 +237,11 @@ class GameController {
       if (unit) this.addMove(unit.id, unit.x, unit.y, action.x, action.y);
       playSound("move");
       this.state = applyAction(this.state, action);
+      const ruin = this.state.lastRuinReward;
+      if (ruin) {
+        this.addFloat(ruin.x, ruin.y, ruin.label, ruin.playerId === HUMAN_ID ? "#ffd75e" : "#c8b79b");
+        playSound(ruin.playerId === HUMAN_ID ? "levelUp" : "capture");
+      }
     } else {
       const before = this.state;
       this.state = applyAction(before, action);

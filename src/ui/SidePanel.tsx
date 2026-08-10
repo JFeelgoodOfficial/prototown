@@ -83,6 +83,16 @@ export default function SidePanel() {
       );
     }
 
+    if (tile.ruin) {
+      return (
+        <Panel title="Ancient ruin">
+          <div className="mt-1 text-xs text-white/60">
+            Move a unit here to claim what's left inside — stars, a lost technology, veterans, settlers, or maps.
+          </div>
+        </Panel>
+      );
+    }
+
     const tileActs = game.legal.filter(
       (a) => (a.type === "HARVEST" || a.type === "BUILD") && a.x === x && a.y === y,
     );

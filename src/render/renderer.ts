@@ -213,6 +213,7 @@ function drawTile(ctx: CanvasRenderingContext2D, state: GameState, tile: Tile, w
   if (tile.resource) drawResource(ctx, tile.resource, wx, wy);
   if (tile.building) drawBuilding(ctx, tile.building, wx, wy);
   if (tile.village) drawVillage(ctx, wx, wy);
+  if (tile.ruin) drawRuin(ctx, wx, wy);
   if (tile.cityHere !== null) {
     const city = cityById(state, tile.cityHere);
     if (city) drawCity(ctx, state, city, wx, wy);
@@ -308,6 +309,33 @@ function drawVillage(ctx: CanvasRenderingContext2D, wx: number, wy: number): voi
   ctx.lineTo(wx + 11, wy - 5);
   ctx.closePath();
   ctx.fillStyle = "#6d6152";
+  ctx.fill();
+}
+
+/** Broken pillars on a flagstone, distinct from a village's intact roof. */
+function drawRuin(ctx: CanvasRenderingContext2D, wx: number, wy: number): void {
+  ctx.fillStyle = "rgba(30,24,18,0.35)";
+  ctx.beginPath();
+  ctx.ellipse(wx, wy + 3, 15, 7, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  const pillars: Array<[number, number, number]> = [
+    [-9, 0, 11],
+    [0, -2, 15],
+    [9, 1, 8],
+  ];
+  for (const [dx, dy, h] of pillars) {
+    ctx.fillStyle = "#b9ae97";
+    ctx.fillRect(wx + dx - 2.5, wy + dy - h, 5, h);
+    ctx.fillStyle = "#8c8271";
+    ctx.fillRect(wx + dx + 1, wy + dy - h, 1.5, h);
+    ctx.fillStyle = "#d7cdb6";
+    ctx.fillRect(wx + dx - 3.5, wy + dy - h - 2, 7, 2.5);
+  }
+  // a glint, so a ruin reads as worth walking to
+  ctx.fillStyle = "rgba(255,225,150,0.9)";
+  ctx.beginPath();
+  ctx.arc(wx + 3, wy - 12, 1.8, 0, Math.PI * 2);
   ctx.fill();
 }
 

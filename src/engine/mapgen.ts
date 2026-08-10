@@ -2,7 +2,7 @@ import type { GameState, PlayerState, Tile, TerrainType, City, Unit } from "./st
 import { idx, inBounds, neighbors, dist } from "./state";
 import { mulberry32, nextInt } from "./rng";
 import { tribeById } from "../data/tribes";
-import { INITIAL_STARS, MAX_TURNS_PERFECTION } from "../data/constants";
+import { INITIAL_STARS, MAX_TURNS_PERFECTION, RUIN_TILES_PER } from "../data/constants";
 import { computeVisibility } from "./fog";
 import type { WinMode } from "./state";
 
@@ -101,7 +101,7 @@ export function newGame(opts: NewGameOptions): GameState {
       else if (e > 0.78) terrain = "mountain";
       else terrain = m > 0.62 ? "forest" : "field";
 
-      tiles.push({ x, y, terrain, resource: null, building: null, cityId: null, village: false, cityHere: null });
+      tiles.push({ x, y, terrain, resource: null, building: null, cityId: null, village: false, cityHere: null, ruin: false });
     }
   }
 
@@ -119,6 +119,8 @@ export function newGame(opts: NewGameOptions): GameState {
     winMode,
     maxTurns: MAX_TURNS_PERFECTION,
     winnerId: null,
+    lastRuinReward: null,
+    scoreHistory: [],
   };
 
   // Capitals: force a playable pocket of land around each
@@ -154,13 +156,32 @@ export function newGame(opts: NewGameOptions): GameState {
     villagesPlaced++;
   }
 
+  // Ruins: rarer than villages and pushed out toward the unexplored middle
+  // ground, so exploring away from home has a payoff of its own.
+  const ruinTarget = Math.floor((size * size) / RUIN_TILES_PER);
+  let ruinsPlaced = 0;
+  attempts = 0;
+  while (ruinsPlaced < ruinTarget && attempts < 4000) {
+    attempts++;
+    const x = nextInt(state, size);
+    const y = nextInt(state, size);
+    const t = tiles[idx(state, x, y)];
+    if (t.terrain !== "field" && t.terrain !== "forest" && t.terrain !== "mountain") continue;
+    if (t.village || t.ruin) continue;
+    if (capitals.some(([cx, cy]) => dist(x, y, cx, cy) < 4)) continue;
+    if (tiles.some((o) => o.ruin && dist(x, y, o.x, o.y) < 3)) continue;
+    t.ruin = true;
+    t.resource = null;
+    ruinsPlaced++;
+  }
+
   // Resources — biased near villages and capitals (their future territory)
   const settlementTiles = [
     ...capitals.map(([x, y]) => ({ x, y })),
     ...tiles.filter((t) => t.village),
   ];
   for (const t of tiles) {
-    if (t.village || t.cityHere !== null) continue;
+    if (t.village || t.ruin || t.cityHere !== null) continue;
     const nearSettlement = settlementTiles.some((s) => dist(t.x, t.y, s.x, s.y) <= 2);
     const chance = nearSettlement ? 0.5 : 0.08;
     if (t.terrain === "field") {

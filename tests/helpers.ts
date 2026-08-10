@@ -7,7 +7,7 @@ export function makeTestState(size = 8): GameState {
   const tiles: Tile[] = [];
   for (let y = 0; y < size; y++)
     for (let x = 0; x < size; x++)
-      tiles.push({ x, y, terrain: "field", resource: null, building: null, cityId: null, village: false, cityHere: null });
+      tiles.push({ x, y, terrain: "field", resource: null, building: null, cityId: null, village: false, cityHere: null, ruin: false });
 
   const state: GameState = {
     seed: 1,
@@ -23,6 +23,8 @@ export function makeTestState(size = 8): GameState {
     winMode: "domination",
     maxTurns: 30,
     winnerId: null,
+    lastRuinReward: null,
+    scoreHistory: [],
   };
 
   // Korvani (boat speed) and Thornwood (climbing) are the two tribes whose

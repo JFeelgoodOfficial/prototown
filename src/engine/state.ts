@@ -16,6 +16,8 @@ export interface Tile {
   village: boolean;
   /** city (or captured village) sits here */
   cityHere: number | null;
+  /** unexplored ruin: the first unit to walk in claims what's inside */
+  ruin: boolean;
 }
 
 export interface City {
@@ -83,6 +85,21 @@ export interface GameState {
   winMode: WinMode;
   maxTurns: number;
   winnerId: number | null;
+  /** what the last ruin gave up, for the UI to announce; cleared each action */
+  lastRuinReward: RuinReward | null;
+  /** score per player at the end of each completed turn, oldest first */
+  scoreHistory: number[][];
+}
+
+export type RuinRewardKind = "stars" | "tech" | "veteran" | "population" | "map";
+
+export interface RuinReward {
+  kind: RuinRewardKind;
+  x: number;
+  y: number;
+  playerId: number;
+  /** short human-readable label, e.g. "+8 stars" */
+  label: string;
 }
 
 export function idx(state: Pick<GameState, "size">, x: number, y: number): number {

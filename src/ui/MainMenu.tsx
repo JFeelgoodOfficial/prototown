@@ -3,6 +3,7 @@ import { useGame } from "./store";
 import type { Difficulty } from "../game/controller";
 import { HUMAN_ID } from "../game/controller";
 import { loadGame } from "../game/persistence";
+import { dailyOptions, dailyKey, loadDailyResult, DAILY_DIFFICULTY } from "../game/daily";
 import { TRIBES, tribeById } from "../data/tribes";
 import UnitPortrait from "./UnitPortrait";
 import type { GameState, WinMode } from "../engine/state";
@@ -15,6 +16,7 @@ export default function MainMenu() {
   const [winMode, setWinMode] = useState<WinMode>("domination");
   // Read storage once per menu mount; the in-memory game takes priority when present.
   const stored = useMemo(() => loadGame(), []);
+  const daily = useMemo(() => loadDailyResult(), []);
   const resumeInfo = game.state
     ? describeGame(game.state, game.lastSavedAt)
     : stored
@@ -95,6 +97,17 @@ export default function MainMenu() {
             onClick={start}
           >
             New game
+          </button>
+          <button
+            className="w-full rounded-xl border border-amber-400/30 bg-amber-500/15 py-2.5 font-semibold text-amber-200 hover:bg-amber-500/25"
+            onClick={() => game.startNewGame(dailyOptions(), DAILY_DIFFICULTY)}
+          >
+            Daily challenge
+            <span className="block text-xs font-normal text-amber-200/60">
+              {daily
+                ? `Today's best: ${daily.score}${daily.won ? " · won" : ""} — play again`
+                : `Same map for everyone today · ${dailyKey()}`}
+            </span>
           </button>
           {resumeInfo && (
             <button

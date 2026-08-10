@@ -8,11 +8,13 @@ import { tribeById } from "../data/tribes";
 import { isMuted, setMuted } from "../game/sound";
 import TechTreeDialog from "./TechTreeDialog";
 import HelpOverlay from "./HelpOverlay";
+import ScoreDialog from "./ScoreDialog";
 
 export default function TopBar() {
   const game = useGame();
   const [techOpen, setTechOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
+  const [scoreOpen, setScoreOpen] = useState(false);
   // the mute flag lives outside React; this re-renders the toggle after a change
   const [, setMutedTick] = useState(0);
   const s = game.state;
@@ -30,7 +32,13 @@ export default function TopBar() {
       <span title="Stars (income per turn)">
         ⭐ {me.stars} <span className="text-white/50">(+{playerIncome(s, HUMAN_ID)})</span>
       </span>
-      <span title="Score">🏆 {playerScore(s, HUMAN_ID)}</span>
+      <button
+        className="rounded hover:bg-white/10"
+        onClick={() => setScoreOpen(true)}
+        title="Where your score comes from"
+      >
+        🏆 {playerScore(s, HUMAN_ID)}
+      </button>
       <span className="text-white/60">
         Turn {s.turn}
         {s.winMode === "perfection" ? ` / ${s.maxTurns}` : ""}
@@ -87,6 +95,7 @@ export default function TopBar() {
       </div>
       {techOpen && <TechTreeDialog onClose={() => setTechOpen(false)} />}
       {helpOpen && <HelpOverlay onClose={() => setHelpOpen(false)} />}
+      {scoreOpen && <ScoreDialog onClose={() => setScoreOpen(false)} />}
     </div>
   );
 }

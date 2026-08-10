@@ -59,6 +59,16 @@ export function renderMinimap(
     }
   }
 
+  // ruins are the reason to go somewhere, so they get their own mark
+  for (const tile of state.tiles) {
+    if (!tile.ruin) continue;
+    const i = idx(state, tile.x, tile.y);
+    if (!view.revealAll && view.explored[i] !== 1) continue;
+    ctx.fillStyle = "#ffd75e";
+    const s = Math.max(2, cell * 0.5);
+    ctx.fillRect(originX + tile.x * cell + (cell - s) / 2, originY + tile.y * cell + (cell - s) / 2, s, s);
+  }
+
   // cities read as bright squares, units as dots, both only where visible
   for (const city of state.cities) {
     const i = idx(state, city.x, city.y);
