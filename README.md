@@ -1,73 +1,44 @@
-# React + TypeScript + Vite
+# Polyforge
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+A single-player 4X strategy game in the spirit of The Battle of Polytopia,
+built to play in the browser — you against 1–3 AI tribes. No multiplayer,
+no accounts, no server: the whole game runs client-side and autosaves to
+your browser.
 
-Currently, two official plugins are available:
+## Play
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
-
-## React Compiler
-
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```
+npm install
+npm run dev
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+Open the printed URL, pick a tribe, and start a game.
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+- **Domination** — capture every rival city to be the last tribe standing.
+- **Perfection** — score the most points in 30 turns.
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+Click units to select, click highlighted tiles to move, click ringed
+enemies to attack. Capture villages to found cities, harvest resources to
+level them up, research the 25-tech tree, and out-fight the AI.
+
+## How it works
+
+- `src/engine/` — pure, deterministic game engine: `GameState` +
+  `computeLegalActions` + `applyAction`. Seeded RNG lives in the state, so
+  games replay identically. Mechanics (combat formula, unit stats, tech
+  tree, city leveling) follow the open-source
+  [Tribes](https://github.com/GAIGResearch/Tribes) research implementation.
+- `src/ai/` — greedy heuristic agent that plays through the same
+  legal-action API as the human, under the same fog of war.
+- `src/render/` — Canvas 2D isometric renderer with procedural art.
+- `src/ui/` — React components for menus, panels, and dialogs.
+
+## Development
+
 ```
+npm test        # engine test suite (combat, economy, mapgen, AI self-play)
+npm run build   # type-check + production build
+```
+
+All art is drawn procedurally in code; there are no third-party game
+assets. Tribe names, city names, and visuals are original.
