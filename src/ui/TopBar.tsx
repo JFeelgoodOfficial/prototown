@@ -6,10 +6,12 @@ import { playerIncome } from "../engine/economy";
 import { playerScore } from "../engine/score";
 import { tribeById } from "../data/tribes";
 import TechTreeDialog from "./TechTreeDialog";
+import HelpOverlay from "./HelpOverlay";
 
 export default function TopBar() {
   const game = useGame();
   const [techOpen, setTechOpen] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
   const s = game.state;
   if (!s) return null;
   const me = playerById(s, HUMAN_ID);
@@ -45,6 +47,13 @@ export default function TopBar() {
         </button>
         <button
           className="rounded bg-white/10 px-3 py-1.5 hover:bg-white/20"
+          onClick={() => setHelpOpen(true)}
+          title="How to play"
+        >
+          ?
+        </button>
+        <button
+          className="rounded bg-white/10 px-3 py-1.5 hover:bg-white/20"
           onClick={() => game.backToMenu()}
           title="Back to menu (game is autosaved)"
         >
@@ -52,6 +61,7 @@ export default function TopBar() {
         </button>
       </div>
       {techOpen && <TechTreeDialog onClose={() => setTechOpen(false)} />}
+      {helpOpen && <HelpOverlay onClose={() => setHelpOpen(false)} />}
     </div>
   );
 }
