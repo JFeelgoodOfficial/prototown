@@ -4,6 +4,7 @@ import { applyAction } from "../src/engine/reducer";
 import { computeLegalActions } from "../src/engine/legalActions";
 import { actionKey } from "../src/engine/actions";
 import { HeuristicAgent } from "../src/ai/heuristicAgent";
+import { BALANCED } from "../src/ai/evaluate";
 import type { GameState } from "../src/engine/state";
 
 /**
@@ -13,7 +14,7 @@ import type { GameState } from "../src/engine/state";
 function playGame(seed: number, maxRounds = 40): { state: GameState; log: string[] } {
   let state = newGame({ seed, size: 11, tribes: ["meridia", "ashfen", "thornwood"], winMode: "perfection" });
   state.maxTurns = maxRounds - 5;
-  const agent = new HeuristicAgent({ aggression: 1 });
+  const agent = new HeuristicAgent(BALANCED);
   const log: string[] = [];
   let safety = 20000;
 

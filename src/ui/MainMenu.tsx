@@ -54,6 +54,10 @@ export default function MainMenu() {
                   {t.name}
                 </div>
                 <div className="text-[11px] text-white/45">{t.tagline}</div>
+                <div className="mt-1 text-[11px] font-semibold" style={{ color: t.color }}>
+                  {t.ability.name}
+                </div>
+                <div className="text-[10px] leading-tight text-white/55">{t.ability.description}</div>
                 <div className="mt-1.5 flex gap-1">
                   <Swatch color={t.color} />
                   <Swatch color={t.colorDark} />

@@ -25,8 +25,12 @@ export function makeTestState(size = 8): GameState {
     winnerId: null,
   };
 
-  addPlayer(state, "meridia", true);
-  addPlayer(state, "ashfen", false);
+  // Korvani (boat speed) and Thornwood (climbing) are the two tribes whose
+  // abilities leave land combat and income untouched, so the formula tests
+  // below measure the rules rather than a tribe bonus. Tests that care about
+  // an ability set the tribe themselves.
+  addPlayer(state, "korvani", true);
+  addPlayer(state, "thornwood", false);
   addCity(state, 0, 1, 1, true);
   addCity(state, 1, size - 2, size - 2, true);
   return state;

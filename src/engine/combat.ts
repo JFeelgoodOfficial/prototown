@@ -3,6 +3,7 @@ import { tileAt, playerById, hasTech, cityById, dist } from "./state";
 import { UNITS, NAVAL } from "../data/units";
 import { ATTACK_ACCELERATOR, DEFENCE_BONUS_TERRAIN, DEFENCE_BONUS_WALLS } from "../data/constants";
 import { TERRAIN } from "../data/terrain";
+import { abilityOf } from "./tribeAbility";
 
 export function unitAtk(u: Unit): number {
   return u.embarked ? NAVAL[u.embarked].atk : UNITS[u.type].atk;
@@ -16,8 +17,15 @@ export function unitRange(u: Unit): number {
   return u.embarked ? NAVAL[u.embarked].range : UNITS[u.type].range;
 }
 
+/** Base movement, before any tribe bonus (used where no state is at hand). */
 export function unitMov(u: Unit): number {
   return u.embarked ? NAVAL[u.embarked].mov : UNITS[u.type].mov;
+}
+
+/** Movement including the owner's tribe ability. */
+export function unitMovIn(state: GameState, u: Unit): number {
+  const bonus = u.embarked ? abilityOf(state, u.ownerId).navalMoveBonus : 0;
+  return unitMov(u) + bonus;
 }
 
 /**
@@ -59,7 +67,8 @@ export function resolveCombat(state: GameState, attacker: Unit, defender: Unit):
   const defenceForce = def * (defender.hp / defender.maxHp) * defenceBonus(state, defender);
   const total = attackForce + defenceForce;
 
-  const damageToDefender = Math.round((attackForce / total) * atk * ATTACK_ACCELERATOR);
+  const damageMultiplier = abilityOf(state, attacker.ownerId).damageMultiplier;
+  const damageToDefender = Math.round((attackForce / total) * atk * ATTACK_ACCELERATOR * damageMultiplier);
   const defenderDies = defender.hp - damageToDefender <= 0;
 
   let damageToAttacker = 0;
@@ -68,7 +77,9 @@ export function resolveCombat(state: GameState, attacker: Unit, defender: Unit):
     const inRetaliationRange =
       dist(attacker.x, attacker.y, defender.x, defender.y) <= unitRange(defender);
     if (inRetaliationRange) {
-      damageToAttacker = Math.round((defenceForce / total) * def * ATTACK_ACCELERATOR);
+      // retaliation is the defender striking back, so it uses their tribe's bonus
+      const retaliationMultiplier = abilityOf(state, defender.ownerId).damageMultiplier;
+      damageToAttacker = Math.round((defenceForce / total) * def * ATTACK_ACCELERATOR * retaliationMultiplier);
       attackerDies = attacker.hp - damageToAttacker <= 0;
     }
   }

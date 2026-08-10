@@ -1,7 +1,8 @@
 import type { GameState, Unit } from "./state";
 import { idx, neighbors, unitAt, playerById, hasTech, cityById } from "./state";
 import { TERRAIN } from "../data/terrain";
-import { unitMov } from "./combat";
+import { unitMovIn } from "./combat";
+import { abilityOf } from "./tribeAbility";
 
 /**
  * Tiles the unit can move to this turn. BFS in move points with the
@@ -15,8 +16,9 @@ import { unitMov } from "./combat";
 export function reachableTiles(state: GameState, unit: Unit): Array<[number, number]> {
   const player = playerById(state, unit.ownerId);
   const start = idx(state, unit.x, unit.y);
+  const canEnter = terrainOpenTo(state, unit.ownerId);
   const budget: number[] = new Array(state.size * state.size).fill(-1);
-  budget[start] = unitMov(unit);
+  budget[start] = unitMovIn(state, unit);
   const queue: number[] = [start];
   const out: Array<[number, number]> = [];
 
@@ -57,11 +59,7 @@ export function reachableTiles(state: GameState, unit: Unit): Array<[number, num
         }
       } else {
         entering = "land";
-        if (terr.requiresTech && !hasTech(player, terr.requiresTech) && unit.embarked === null) continue;
-        if (unit.embarked !== null) {
-          // disembark: any adjacent land tile, ends movement
-          if (terr.requiresTech && !hasTech(player, terr.requiresTech)) continue;
-        }
+        if (!canEnter(tile.terrain)) continue;
       }
 
       const stops =
@@ -83,4 +81,19 @@ export function reachableTiles(state: GameState, unit: Unit): Array<[number, num
     }
   }
   return out;
+}
+
+/**
+ * Whether a player's land units may enter a terrain: the tech gate, waived
+ * for tribes whose ability climbs mountains for free.
+ */
+export function terrainOpenTo(state: GameState, playerId: number): (terrain: string) => boolean {
+  const player = playerById(state, playerId);
+  const climbs = abilityOf(state, playerId).freeClimbing;
+  return (terrain: string) => {
+    const terr = TERRAIN[terrain as keyof typeof TERRAIN];
+    if (!terr.requiresTech) return true;
+    if (climbs && terr.requiresTech === "climbing") return true;
+    return hasTech(player, terr.requiresTech);
+  };
 }

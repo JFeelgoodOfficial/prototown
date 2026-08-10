@@ -28,6 +28,8 @@ export interface ViewOptions {
   hoverTile: [number, number] | null;
   floatingTexts: FloatingText[];
   revealAll: boolean;
+  /** world-space offsets per unit id, for move slides and hit flinches */
+  unitOffsets?: Map<number, [number, number]>;
 }
 
 /** Fits the 100-unit-tall authored figures onto a 72x36 iso tile. */
@@ -122,7 +124,16 @@ export function render(ctx: CanvasRenderingContext2D, state: GameState, view: Vi
     if (!visible) continue;
     const [wx, wy] = gridToWorld(x, y);
     if (offscreen(wx, wy)) continue;
-    drawUnit(ctx, state, unit, wx, wy, unit.id === view.selectedUnitId, attackSet.has(unit.id));
+    const off = view.unitOffsets?.get(unit.id);
+    drawUnit(
+      ctx,
+      state,
+      unit,
+      wx + (off ? off[0] : 0),
+      wy + (off ? off[1] : 0),
+      unit.id === view.selectedUnitId,
+      attackSet.has(unit.id),
+    );
   }
 
   // Pass 3: city nameplates on top of everything (tiles drawn later would cover them)

@@ -14,6 +14,7 @@ import {
 } from "./state";
 import type { Action } from "./actions";
 import { resolveCombat, unitRange } from "./combat";
+import { terrainOpenTo } from "./movement";
 import { computeVisibility } from "./fog";
 import { claimTerritory } from "./mapgen";
 import { updateWinState } from "./win";
@@ -50,7 +51,11 @@ export function applyAction(prev: GameState, action: Action): GameState {
       const to = tileAt(state, action.x, action.y);
       const toWater = TERRAIN[to.terrain].water;
       if (unit.embarked === null && toWater) {
-        unit.embarked = from.building === "port" ? "raft" : "raft";
+        // Launching always happens at a port (movement enforces it). A port
+        // belonging to a player who knows Sailing puts out a ship directly,
+        // so the tech pays off at the dock instead of only as a paid refit.
+        const fromPort = from.building === "port";
+        unit.embarked = fromPort && hasTech(player, "sailing") ? "ship" : "raft";
       } else if (unit.embarked !== null && !toWater) {
         unit.embarked = null;
       }
@@ -242,11 +247,11 @@ function maybePromote(unit: Unit): void {
 
 /** Can this unit stand on (x,y) after a kill: terrain class matches its mode. */
 function canOccupy(state: GameState, unit: Unit, x: number, y: number): boolean {
-  const terr = TERRAIN[tileAt(state, x, y).terrain];
+  const tile = tileAt(state, x, y);
+  const terr = TERRAIN[tile.terrain];
   if (terr.water) return unit.embarked !== null;
   if (unit.embarked !== null) return false;
-  if (terr.requiresTech && !hasTech(playerById(state, unit.ownerId), terr.requiresTech)) return false;
-  return true;
+  return terrainOpenTo(state, unit.ownerId)(tile.terrain);
 }
 
 function applyReward(state: GameState, city: City, reward: string): void {

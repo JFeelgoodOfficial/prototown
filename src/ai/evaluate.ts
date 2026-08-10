@@ -10,7 +10,15 @@ import { cityUnitCount, cityCapacity } from "../engine/economy";
 export interface AiPersonality {
   /** multiplies attack/military scores; 1 = balanced */
   aggression: number;
+  /** multiplies the pull toward villages and enemy cities */
+  expansion: number;
+  /** multiplies harvesting and building */
+  economy: number;
+  /** multiplies research */
+  research: number;
 }
+
+export const BALANCED: AiPersonality = { aggression: 1, expansion: 1, economy: 1, research: 1 };
 
 interface Objective {
   x: number;
@@ -67,7 +75,7 @@ export function scoreAction(
     }
 
     case "CAPTURE":
-      return 1000;
+      return 1000 * personality.expansion;
 
     case "MOVE": {
       const unit = unitById(state, action.unitId);
@@ -76,13 +84,13 @@ export function scoreAction(
       if (!best) return 0;
       const before = dist(unit.x, unit.y, best.x, best.y);
       const after = dist(action.x, action.y, best.x, best.y);
-      let score = (before - after) * 8 * best.weight;
+      let score = (before - after) * 8 * best.weight * personality.expansion;
       // landing on a village/city tile sets up next-turn capture
       const destTile = tileAt(state, action.x, action.y);
-      if (destTile.village) score += 60;
+      if (destTile.village) score += 60 * personality.expansion;
       if (destTile.cityHere !== null) {
         const c = cityById(state, destTile.cityHere);
-        if (c && c.ownerId !== playerId) score += 60;
+        if (c && c.ownerId !== playerId) score += 60 * personality.expansion;
       }
       // wounded units prefer own territory
       if (unit.hp < unit.maxHp / 2) {
@@ -100,17 +108,20 @@ export function scoreAction(
     }
 
     case "HARVEST":
-      return 55;
+      return 55 * personality.economy;
 
     case "BUILD":
-      return 50;
+      return 50 * personality.economy;
 
     case "TRAIN": {
       const city = cityById(state, action.cityId);
       if (!city) return -Infinity;
       const army = unitsOf(state, playerId).length;
       const cities = citiesOf(state, playerId).length;
-      const wantArmy = cities * 2 + 1;
+      // A more aggressive opponent keeps a larger standing army, but only
+      // half as much larger as its aggression — scaling it fully starves the
+      // economy that pays for the army in the first place.
+      const wantArmy = Math.round((cities * 2 + 1) * (1 + (personality.aggression - 1) * 0.5));
       if (army >= wantArmy) return -5;
       if (cityUnitCount(state, city.id) >= cityCapacity(city)) return -Infinity;
       const def = UNITS[action.unitType];
@@ -125,7 +136,7 @@ export function scoreAction(
       if (["archery", "shields", "smithery", "chivalry"].includes(tech.id)) score += 8 * personality.aggression;
       // don't spend everything on research when broke
       if (player.stars < 8) score -= 15;
-      return score;
+      return score * personality.research;
     }
 
     case "CHOOSE_REWARD": {

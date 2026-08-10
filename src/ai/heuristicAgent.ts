@@ -2,7 +2,7 @@ import type { GameState } from "../engine/state";
 import type { Action } from "../engine/actions";
 import { computeLegalActions } from "../engine/legalActions";
 import type { AiAgent } from "./agent";
-import { objectivesFor, scoreAction, type AiPersonality } from "./evaluate";
+import { objectivesFor, scoreAction, BALANCED, type AiPersonality } from "./evaluate";
 
 /**
  * Greedy heuristic agent in the style of the reference implementation's
@@ -10,7 +10,7 @@ import { objectivesFor, scoreAction, type AiPersonality } from "./evaluate";
  * END_TURN comes out on top. Deterministic given the same state.
  */
 export class HeuristicAgent implements AiAgent {
-  constructor(private personality: AiPersonality = { aggression: 1 }) {}
+  constructor(private personality: AiPersonality = BALANCED) {}
 
   chooseAction(state: GameState, playerId: number): Action {
     const actions = computeLegalActions(state, playerId);

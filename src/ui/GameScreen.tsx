@@ -1,8 +1,9 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useGame } from "./store";
-import { controller, HUMAN_ID } from "../game/controller";
+import { controller, HUMAN_ID, type UnitAnim } from "../game/controller";
 import { render, type ViewOptions } from "../render/renderer";
-import { worldToGrid } from "../render/iso";
+import { renderMinimap, minimapToGrid } from "../render/minimap";
+import { worldToGrid, gridToWorld } from "../render/iso";
 import {
   screenToWorld,
   clampZoom,
@@ -34,13 +35,22 @@ export default function GameScreen() {
     const ctx = canvas.getContext("2d")!;
 
     let raf = 0;
+    // Invalidated by anything that makes the last painted frame stale. Assigning
+    // canvas.width clears the canvas, so a resize *must* force a repaint or the
+    // board stays blank until something else happens to change the frame key.
+    let lastFrameKey = "";
     const resize = () => {
       const rect = canvas.parentElement!.getBoundingClientRect();
       const dpr = window.devicePixelRatio || 1;
-      canvas.width = rect.width * dpr;
-      canvas.height = rect.height * dpr;
-      canvas.style.width = `${rect.width}px`;
-      canvas.style.height = `${rect.height}px`;
+      const w = Math.round(rect.width * dpr);
+      const h = Math.round(rect.height * dpr);
+      if (canvas.width !== w || canvas.height !== h) {
+        canvas.width = w;
+        canvas.height = h;
+        canvas.style.width = `${rect.width}px`;
+        canvas.style.height = `${rect.height}px`;
+      }
+      lastFrameKey = "";
       viewRef.current = { w: rect.width, h: rect.height };
       // A rotation or window resize can leave the camera zoomed in past what now fits.
       const cam = cameraRef.current;
@@ -73,13 +83,22 @@ export default function GameScreen() {
     // A turn-based board is static most of the time. Redrawing an unchanged
     // frame 60x a second is pure battery burn on a phone, so only draw when
     // something the renderer reads has actually moved.
-    let lastFrameKey = "";
     const draw = () => {
       const s = controller.state;
       const cam = cameraRef.current!;
       if (s) {
+        // A pending focus (from cycling to an idle unit) moves the camera first.
+        if (controller.focusRequest) {
+          const [fx, fy] = controller.focusRequest;
+          const [wx, wy] = gridToWorld(fx, fy);
+          cam.x = wx;
+          cam.y = wy;
+          clampCamera(cam, s.size, viewRef.current.w, viewRef.current.h);
+          controller.focusRequest = null;
+        }
+
         const hover = hoverRef.current;
-        const animating = controller.floats.length > 0;
+        const animating = controller.floats.length > 0 || controller.anims.length > 0;
         const frameKey = `${controller.getVersion()}|${cam.x.toFixed(2)},${cam.y.toFixed(2)},${cam.zoom.toFixed(4)}|${hover ? `${hover[0]},${hover[1]}` : ""}|${canvas.width}x${canvas.height}|${controller.revealAll}`;
         if (!animating && frameKey === lastFrameKey) {
           raf = requestAnimationFrame(draw);
@@ -93,6 +112,8 @@ export default function GameScreen() {
         const human = playerById(s, HUMAN_ID);
         const now = performance.now();
         controller.floats = controller.floats.filter((f) => now - f.bornAt < 900);
+        controller.anims = controller.anims.filter((a) => now - a.bornAt < a.duration);
+        const unitOffsets = offsetsFor(controller.anims, now);
 
         const selected = controller.selectedUnitId;
         const key = `${controller.getVersion()}:${selected}:${controller.aiBusy}`;
@@ -128,6 +149,7 @@ export default function GameScreen() {
             t: (now - f.bornAt) / 900,
           })),
           revealAll: controller.revealAll,
+          unitOffsets,
         };
         render(ctx, s, view);
         ctx.restore();
@@ -280,6 +302,50 @@ export default function GameScreen() {
       clampCamera(cam, s.size, w, h);
     };
 
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      // a focused button handles its own Space/Enter
+      const onButton = document.activeElement?.tagName === "BUTTON";
+      const s = controller.state;
+      if (!s || controller.aiBusy) return;
+      const modalOpen = controller.legal.some((a) => a.type === "CHOOSE_REWARD");
+
+      switch (e.key) {
+        case "Escape":
+          controller.selectUnit(null);
+          break;
+        case "Tab": {
+          if (modalOpen) return;
+          e.preventDefault();
+          controller.cycleIdleUnit();
+          break;
+        }
+        case " ":
+        case "Enter": {
+          if (modalOpen || onButton) return;
+          e.preventDefault();
+          const end = controller.legal.find((a) => a.type === "END_TURN");
+          if (end) controller.dispatch(end);
+          break;
+        }
+        case "+":
+        case "=":
+          e.preventDefault();
+          zoomBy(1.3);
+          break;
+        case "-":
+        case "_":
+          e.preventDefault();
+          zoomBy(1 / 1.3);
+          break;
+        case "f":
+        case "F":
+          recenter();
+          break;
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+
     canvas.addEventListener("pointerdown", onPointerDown);
     canvas.addEventListener("pointermove", onPointerMove);
     canvas.addEventListener("pointerup", onPointerUp);
@@ -289,6 +355,7 @@ export default function GameScreen() {
     return () => {
       cancelAnimationFrame(raf);
       ro.disconnect();
+      window.removeEventListener("keydown", onKeyDown);
       canvas.removeEventListener("pointerdown", onPointerDown);
       canvas.removeEventListener("pointermove", onPointerMove);
       canvas.removeEventListener("pointerup", onPointerUp);
@@ -320,6 +387,7 @@ export default function GameScreen() {
         <canvas ref={canvasRef} className="absolute inset-0 cursor-pointer touch-none select-none" />
         <SidePanel />
         <RewardPicker />
+        <Minimap cameraRef={cameraRef} viewRef={viewRef} />
         <div className="absolute bottom-3 right-3 flex flex-col gap-1.5">
           <MapButton label="+" title="Zoom in" onPress={() => zoomBy(1.3)} />
           <MapButton label="−" title="Zoom out" onPress={() => zoomBy(1 / 1.3)} />
@@ -341,6 +409,116 @@ export default function GameScreen() {
       </div>
     </div>
   );
+}
+
+const MINIMAP_SIZE = 116;
+
+/** Board overview, top-right. Tapping it jumps the camera to that tile. */
+function Minimap({
+  cameraRef,
+  viewRef,
+}: {
+  cameraRef: React.RefObject<Camera | null>;
+  viewRef: React.RefObject<{ w: number; h: number }>;
+}) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [open, setOpen] = useState(true);
+
+  useEffect(() => {
+    if (!open) return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d")!;
+    let raf = 0;
+    let lastKey = "";
+    const tick = () => {
+      const s = controller.state;
+      const cam = cameraRef.current;
+      if (s && cam) {
+        const key = `${controller.getVersion()}|${cam.x.toFixed(0)},${cam.y.toFixed(0)},${cam.zoom.toFixed(3)}|${controller.revealAll}`;
+        if (key !== lastKey) {
+          lastKey = key;
+          const dpr = window.devicePixelRatio || 1;
+          canvas.width = MINIMAP_SIZE * dpr;
+          canvas.height = MINIMAP_SIZE * dpr;
+          ctx.save();
+          ctx.scale(dpr, dpr);
+          renderMinimap(
+            ctx,
+            s,
+            {
+              camera: cam,
+              viewW: viewRef.current.w,
+              viewH: viewRef.current.h,
+              viewerId: HUMAN_ID,
+              explored: playerById(s, HUMAN_ID).explored,
+              revealAll: controller.revealAll,
+            },
+            MINIMAP_SIZE,
+            MINIMAP_SIZE,
+          );
+          ctx.restore();
+        }
+      }
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [open, cameraRef, viewRef]);
+
+  const jump = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    const s = controller.state;
+    const cam = cameraRef.current;
+    if (!s || !cam) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const [gx, gy] = minimapToGrid(s.size, e.clientX - rect.left, e.clientY - rect.top, rect.width, rect.height);
+    if (!inBounds(s, gx, gy)) return;
+    const [wx, wy] = gridToWorld(gx, gy);
+    cam.x = wx;
+    cam.y = wy;
+    clampCamera(cam, s.size, viewRef.current.w, viewRef.current.h);
+  };
+
+  return (
+    <div className="absolute right-3 top-3 flex flex-col items-end gap-1">
+      {open && (
+        <canvas
+          ref={canvasRef}
+          onClick={jump}
+          title="Click to jump there"
+          style={{ width: MINIMAP_SIZE, height: MINIMAP_SIZE }}
+          className="cursor-pointer rounded-md border border-white/15 bg-black/50"
+        />
+      )}
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="touch-manipulation rounded border border-white/15 bg-black/50 px-2 py-0.5 text-[11px] font-semibold text-white/70 hover:bg-black/70"
+      >
+        {open ? "Hide map" : "Map"}
+      </button>
+    </div>
+  );
+}
+
+/**
+ * World-space offset per animating unit: a move eases from the old tile to the
+ * new one, a hit is a short decaying shudder.
+ */
+function offsetsFor(anims: UnitAnim[], now: number): Map<number, [number, number]> {
+  const out = new Map<number, [number, number]>();
+  for (const a of anims) {
+    const t = Math.min(1, (now - a.bornAt) / a.duration);
+    if (a.kind === "move") {
+      const [fx, fy] = gridToWorld(a.fromX, a.fromY);
+      const [tx, ty] = gridToWorld(a.toX, a.toY);
+      const eased = 1 - (1 - t) * (1 - t); // ease-out
+      out.set(a.unitId, [(fx - tx) * (1 - eased), (fy - ty) * (1 - eased)]);
+    } else {
+      const decay = 1 - t;
+      out.set(a.unitId, [Math.sin(t * Math.PI * 6) * 5 * decay, 0]);
+    }
+  }
+  return out;
 }
 
 function MapButton({ label, title, onPress }: { label: string; title: string; onPress: () => void }) {
