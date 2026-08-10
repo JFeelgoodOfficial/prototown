@@ -61,10 +61,32 @@ export default function GameScreen() {
       camKeyRef.current = camKey;
     }
 
+    // Derived per-frame data that only changes when the game state or selection
+    // does — recomputing it every frame walked the whole map for nothing.
+    let derivedKey: unknown = null;
+    let derived = {
+      watched: [] as number[],
+      moves: [] as Array<[number, number]>,
+      attackIds: [] as number[],
+    };
+
+    // A turn-based board is static most of the time. Redrawing an unchanged
+    // frame 60x a second is pure battery burn on a phone, so only draw when
+    // something the renderer reads has actually moved.
+    let lastFrameKey = "";
     const draw = () => {
       const s = controller.state;
       const cam = cameraRef.current!;
       if (s) {
+        const hover = hoverRef.current;
+        const animating = controller.floats.length > 0;
+        const frameKey = `${controller.getVersion()}|${cam.x.toFixed(2)},${cam.y.toFixed(2)},${cam.zoom.toFixed(4)}|${hover ? `${hover[0]},${hover[1]}` : ""}|${canvas.width}x${canvas.height}|${controller.revealAll}`;
+        if (!animating && frameKey === lastFrameKey) {
+          raf = requestAnimationFrame(draw);
+          return;
+        }
+        lastFrameKey = frameKey;
+
         const dpr = window.devicePixelRatio || 1;
         ctx.save();
         ctx.scale(dpr, dpr);
@@ -73,13 +95,18 @@ export default function GameScreen() {
         controller.floats = controller.floats.filter((f) => now - f.bornAt < 900);
 
         const selected = controller.selectedUnitId;
-        const moves: Array<[number, number]> = [];
-        const attackIds: number[] = [];
-        if (selected !== null && !controller.aiBusy) {
-          for (const a of controller.legal) {
-            if (a.type === "MOVE" && a.unitId === selected) moves.push([a.x, a.y]);
-            if (a.type === "ATTACK" && a.unitId === selected) attackIds.push(a.targetId);
+        const key = `${controller.getVersion()}:${selected}:${controller.aiBusy}`;
+        if (key !== derivedKey) {
+          derivedKey = key;
+          const moves: Array<[number, number]> = [];
+          const attackIds: number[] = [];
+          if (selected !== null && !controller.aiBusy) {
+            for (const a of controller.legal) {
+              if (a.type === "MOVE" && a.unitId === selected) moves.push([a.x, a.y]);
+              if (a.type === "ATTACK" && a.unitId === selected) attackIds.push(a.targetId);
+            }
           }
+          derived = { watched: watchedMask(s, human), moves, attackIds };
         }
 
         const view: ViewOptions = {
@@ -88,10 +115,10 @@ export default function GameScreen() {
           height: canvas.height / dpr,
           viewerId: HUMAN_ID,
           explored: human.explored,
-          watched: watchedMask(s, human),
+          watched: derived.watched,
           selectedUnitId: selected,
-          reachable: moves,
-          attackableUnitIds: attackIds,
+          reachable: derived.moves,
+          attackableUnitIds: derived.attackIds,
           hoverTile: hoverRef.current,
           floatingTexts: controller.floats.map((f) => ({
             x: f.x,
