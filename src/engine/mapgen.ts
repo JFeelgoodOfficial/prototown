@@ -243,6 +243,7 @@ export function newGame(opts: NewGameOptions): GameState {
       veteran: false,
       moved: false,
       attacked: false,
+      fortified: false,
       embarked: null,
     };
     state.units.push(unit);

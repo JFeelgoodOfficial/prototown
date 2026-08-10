@@ -1,7 +1,14 @@
 import type { GameState, Unit } from "./state";
 import { tileAt, playerById, hasTech, cityById, dist } from "./state";
 import { UNITS, NAVAL } from "../data/units";
-import { ATTACK_ACCELERATOR, DEFENCE_BONUS_TERRAIN, DEFENCE_BONUS_WALLS } from "../data/constants";
+import {
+  ATTACK_ACCELERATOR,
+  DEFENCE_BONUS_TERRAIN,
+  DEFENCE_BONUS_WALLS,
+  FORTIFY_BONUS,
+  FLANK_BONUS_PER_UNIT,
+  FLANK_BONUS_MAX,
+} from "../data/constants";
 import { TERRAIN } from "../data/terrain";
 import { abilityOf } from "./tribeAbility";
 
@@ -30,9 +37,14 @@ export function unitMovIn(state: GameState, u: Unit): number {
 
 /**
  * Defence multiplier for a unit standing on its tile: 4.0 inside a walled
- * city it owns, 1.5 on defensive terrain whose bonus tech is known.
+ * city it owns, 1.5 on defensive terrain whose bonus tech is known. Digging in
+ * multiplies whichever of those applies.
  */
 export function defenceBonus(state: GameState, defender: Unit): number {
+  return terrainDefence(state, defender) * (defender.fortified ? FORTIFY_BONUS : 1);
+}
+
+function terrainDefence(state: GameState, defender: Unit): number {
   const tile = tileAt(state, defender.x, defender.y);
   if (tile.cityHere !== null) {
     const city = cityById(state, tile.cityHere);
@@ -43,6 +55,19 @@ export function defenceBonus(state: GameState, defender: Unit): number {
     return DEFENCE_BONUS_TERRAIN;
   }
   return 1;
+}
+
+/**
+ * How much harder an attack lands because the defender is already pressed by
+ * the attacker's other units. Surrounding a unit is worth doing.
+ */
+export function flankBonus(state: GameState, attacker: Unit, defender: Unit): number {
+  let pressing = 0;
+  for (const u of state.units) {
+    if (u.ownerId !== attacker.ownerId || u.id === attacker.id) continue;
+    if (dist(u.x, u.y, defender.x, defender.y) <= 1) pressing++;
+  }
+  return 1 + Math.min(FLANK_BONUS_MAX, pressing * FLANK_BONUS_PER_UNIT);
 }
 
 export interface CombatResult {
@@ -67,7 +92,7 @@ export function resolveCombat(state: GameState, attacker: Unit, defender: Unit):
   const defenceForce = def * (defender.hp / defender.maxHp) * defenceBonus(state, defender);
   const total = attackForce + defenceForce;
 
-  const damageMultiplier = abilityOf(state, attacker.ownerId).damageMultiplier;
+  const damageMultiplier = abilityOf(state, attacker.ownerId).damageMultiplier * flankBonus(state, attacker, defender);
   const damageToDefender = Math.round((attackForce / total) * atk * ATTACK_ACCELERATOR * damageMultiplier);
   const defenderDies = defender.hp - damageToDefender <= 0;
 

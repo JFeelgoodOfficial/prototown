@@ -7,9 +7,9 @@ export type Difficulty = "relaxed" | "normal" | "hard";
  * a hard rival also expands sooner, works its land harder and researches more.
  */
 export const DIFFICULTY_PERSONALITY: Record<Difficulty, AiPersonality> = {
-  relaxed: { aggression: 0.6, expansion: 0.8, economy: 0.8, research: 0.7, lookahead: 0 },
-  normal: { aggression: 1, expansion: 1, economy: 1, research: 1, lookahead: 4 },
-  hard: { aggression: 1.5, expansion: 1.3, economy: 1.3, research: 1.4, lookahead: 10 },
+  relaxed: { aggression: 0.6, expansion: 0.8, economy: 0.8, research: 0.7, lookahead: 0, replies: 0 },
+  normal: { aggression: 1, expansion: 1, economy: 1, research: 1, lookahead: 4, replies: 0 },
+  hard: { aggression: 1.5, expansion: 1.3, economy: 1.3, research: 1.4, lookahead: 10, replies: 4 },
 };
 
 export const DIFFICULTIES = Object.keys(DIFFICULTY_PERSONALITY) as Difficulty[];

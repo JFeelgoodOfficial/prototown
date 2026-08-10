@@ -53,6 +53,8 @@ export interface Unit {
   veteran: boolean;
   moved: boolean;
   attacked: boolean;
+  /** dug in: defends better, until it moves or attacks */
+  fortified: boolean;
   /** null on land; otherwise the naval form carrying this unit */
   embarked: "raft" | "ship" | null;
 }

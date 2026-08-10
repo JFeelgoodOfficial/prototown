@@ -9,12 +9,14 @@ import { isMuted, setMuted } from "../game/sound";
 import TechTreeDialog from "./TechTreeDialog";
 import HelpOverlay from "./HelpOverlay";
 import ScoreDialog from "./ScoreDialog";
+import SavesDialog from "./SavesDialog";
 
 export default function TopBar() {
   const game = useGame();
   const [techOpen, setTechOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
   const [scoreOpen, setScoreOpen] = useState(false);
+  const [savesOpen, setSavesOpen] = useState(false);
   // the mute flag lives outside React; this re-renders the toggle after a change
   const [, setMutedTick] = useState(0);
   const s = game.state;
@@ -87,6 +89,14 @@ export default function TopBar() {
         </button>
         <button
           className="rounded bg-white/10 px-2 py-1.5 hover:bg-white/20 sm:px-3"
+          onClick={() => setSavesOpen(true)}
+          title="Saved games"
+          aria-label="Saved games"
+        >
+          💾
+        </button>
+        <button
+          className="rounded bg-white/10 px-2 py-1.5 hover:bg-white/20 sm:px-3"
           onClick={() => game.backToMenu()}
           title="Back to menu (game is autosaved)"
         >
@@ -96,6 +106,7 @@ export default function TopBar() {
       {techOpen && <TechTreeDialog onClose={() => setTechOpen(false)} />}
       {helpOpen && <HelpOverlay onClose={() => setHelpOpen(false)} />}
       {scoreOpen && <ScoreDialog onClose={() => setScoreOpen(false)} />}
+      {savesOpen && <SavesDialog onClose={() => setSavesOpen(false)} />}
     </div>
   );
 }

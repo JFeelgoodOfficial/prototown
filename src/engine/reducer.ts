@@ -68,6 +68,7 @@ export function applyAction(prev: GameState, action: Action): GameState {
       unit.x = action.x;
       unit.y = action.y;
       unit.moved = true;
+      unit.fortified = false; // leaving the position gives up the dug-in bonus
       if (to.ruin) claimRuin(state, unit, to);
       computeVisibility(state, player);
       break;
@@ -82,6 +83,7 @@ export function applyAction(prev: GameState, action: Action): GameState {
       attacker.hp -= result.damageToAttacker;
       attacker.moved = true;
       attacker.attacked = true;
+      attacker.fortified = false; // swinging out of the position breaks the dig-in
 
       if (result.defenderDies) {
         state.units = state.units.filter((u) => u.id !== defender.id);
@@ -158,6 +160,14 @@ export function applyAction(prev: GameState, action: Action): GameState {
       break;
     }
 
+    case "FORTIFY": {
+      const unit = mustUnit(state, action.unitId);
+      unit.fortified = true;
+      unit.moved = true;
+      unit.attacked = true;
+      break;
+    }
+
     case "DISBAND": {
       const unit = mustUnit(state, action.unitId);
       player.stars += Math.floor(UNITS[unit.type].cost / 2);
@@ -209,6 +219,7 @@ export function applyAction(prev: GameState, action: Action): GameState {
         veteran: false,
         moved: true,
         attacked: true,
+        fortified: false,
         embarked: null,
       };
       state.units.push(unit);
@@ -312,7 +323,8 @@ function applyReward(state: GameState, city: City, reward: string): void {
           veteran: false,
           moved: true,
           attacked: true,
-          embarked: null,
+          fortified: false,
+        embarked: null,
         });
       }
       break;

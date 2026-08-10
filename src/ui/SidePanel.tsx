@@ -34,6 +34,7 @@ export default function SidePanel() {
             </div>
             <div className="text-xs text-white/50">
               {unit.moved && unit.attacked ? "Done for this turn" : unit.moved ? "Has moved" : "Ready"}
+              {unit.fortified && <span className="text-sky-300"> · Dug in</span>}
             </div>
           </div>
         </div>
@@ -145,6 +146,8 @@ function labelFor(a: Action): string {
       return "Recover";
     case "DISBAND":
       return "Disband";
+    case "FORTIFY":
+      return "Dig in";
     case "UPGRADE_BOAT":
       return `Upgrade to Ship (⭐${NAVAL.ship.upgradeCost})`;
     case "HARVEST":

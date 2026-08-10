@@ -3,6 +3,12 @@ export const ATTACK_ACCELERATOR = 4.5;
 export const DEFENCE_BONUS_TERRAIN = 1.5;
 export const DEFENCE_BONUS_WALLS = 4.0;
 
+/** Defence multiplier for a unit that spent a turn digging in. */
+export const FORTIFY_BONUS = 1.4;
+/** Extra damage per friendly unit already pressing the defender, and its cap. */
+export const FLANK_BONUS_PER_UNIT = 0.15;
+export const FLANK_BONUS_MAX = 0.45;
+
 export const RECOVER_HEAL = 2;
 export const RECOVER_HEAL_OWN_TERRITORY = 4;
 

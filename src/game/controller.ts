@@ -7,7 +7,17 @@ import { newGame, type NewGameOptions } from "../engine/mapgen";
 import { HeuristicAgent } from "../ai/heuristicAgent";
 import type { AiPersonality } from "../ai/evaluate";
 import type { AiAgent } from "../ai/agent";
-import { saveGame, loadGame, clearSave } from "./persistence";
+import {
+  saveGame,
+  loadGame,
+  clearSave,
+  saveToSlot,
+  loadFromSlot,
+  clearSlot,
+  exportSave,
+  parseSave,
+  type SavedGame,
+} from "./persistence";
 import { DIFFICULTY_PERSONALITY, type Difficulty } from "./difficulty";
 import { playSound } from "./sound";
 
@@ -101,19 +111,7 @@ class GameController {
 
   continueGame(): boolean {
     const loaded = loadGame();
-    if (!loaded) return false;
-    this.state = loaded.state;
-    this.difficulty = loaded.difficulty;
-    this.floats = [];
-    this.anims = [];
-    this.spawnAgents();
-    this.screen = this.state.winnerId !== null ? "gameover" : "game";
-    this.refreshLegal();
-    this.notify();
-    if (this.state.currentPlayerId !== HUMAN_ID && this.state.winnerId === null) {
-      void this.runAiTurns();
-    }
-    return true;
+    return loaded ? this.adoptSave(loaded) : false;
   }
 
   backToMenu(): void {
@@ -150,6 +148,54 @@ class GameController {
   saveNow(): void {
     if (!this.state || this.state.winnerId !== null) return;
     this.persist();
+  }
+
+  /** Copy the current game into a named slot, so it survives the autosave. */
+  saveToSlot(slot: number): boolean {
+    if (!this.state) return false;
+    const ok = saveToSlot(slot, this.state, this.difficulty);
+    this.notify();
+    return ok;
+  }
+
+  loadFromSlot(slot: number): boolean {
+    const loaded = loadFromSlot(slot);
+    return loaded ? this.adoptSave(loaded) : false;
+  }
+
+  clearSlot(slot: number): void {
+    clearSlot(slot);
+    this.notify();
+  }
+
+  /** Text of the current game, for moving it to another device. */
+  exportCurrent(): string | null {
+    return this.state ? exportSave(this.state, this.difficulty) : null;
+  }
+
+  /** Load a game from pasted or uploaded save text. */
+  importSave(text: string): boolean {
+    const loaded = parseSave(text);
+    return loaded ? this.adoptSave(loaded) : false;
+  }
+
+  /** Take a loaded save as the live game and start playing it. */
+  private adoptSave(loaded: SavedGame): boolean {
+    this.state = loaded.state;
+    this.difficulty = loaded.difficulty;
+    this.floats = [];
+    this.anims = [];
+    this.selectedUnitId = null;
+    this.selectedTile = null;
+    this.spawnAgents();
+    this.screen = this.state.winnerId !== null ? "gameover" : "game";
+    this.refreshLegal();
+    this.persist();
+    this.notify();
+    if (this.state.currentPlayerId !== HUMAN_ID && this.state.winnerId === null) {
+      void this.runAiTurns();
+    }
+    return true;
   }
 
   /** Dispatch a human action. */

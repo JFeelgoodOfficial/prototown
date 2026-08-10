@@ -413,6 +413,14 @@ function drawUnit(ctx: CanvasRenderingContext2D, state: GameState, unit: Unit, w
   const tribe = tribeById(state.players[unit.ownerId].tribeId);
 
   // Rings go down first so the figure stands on top of them.
+  if (unit.fortified) {
+    // a low earthwork the figure stands behind
+    ctx.beginPath();
+    ctx.ellipse(wx, wy + 5, 20, 10, 0, Math.PI * 0.08, Math.PI * 0.92);
+    ctx.strokeStyle = "rgba(150,190,230,0.85)";
+    ctx.lineWidth = 3;
+    ctx.stroke();
+  }
   if (selected) {
     ctx.beginPath();
     ctx.ellipse(wx, wy + 4, 18, 9, 0, 0, Math.PI * 2);

@@ -21,9 +21,22 @@ export interface AiPersonality {
    * resulting position. 0 keeps the agent purely greedy.
    */
   lookahead: number;
+  /**
+   * How many of those candidates also get the strongest rival's best reply
+   * played out against them, so a move into a killing blow is seen as one.
+   * 0 stops at the agent's own move.
+   */
+  replies: number;
 }
 
-export const BALANCED: AiPersonality = { aggression: 1, expansion: 1, economy: 1, research: 1, lookahead: 3 };
+export const BALANCED: AiPersonality = {
+  aggression: 1,
+  expansion: 1,
+  economy: 1,
+  research: 1,
+  lookahead: 3,
+  replies: 0,
+};
 
 /**
  * Static worth of a position to one player: what they hold, what it is worth
@@ -140,6 +153,21 @@ export function scoreAction(
         if (own) score += 12;
       }
       return score;
+    }
+
+    case "FORTIFY": {
+      const unit = unitById(state, action.unitId);
+      if (!unit) return -Infinity;
+      // Worth doing where the ground matters: holding a settlement, or with
+      // enemies close enough to attack next turn.
+      const tile = tileAt(state, unit.x, unit.y);
+      const holdsSettlement =
+        tile.cityHere !== null && cityById(state, tile.cityHere)?.ownerId === playerId;
+      const threatened = state.units.some(
+        (e) => e.ownerId !== playerId && dist(e.x, e.y, unit.x, unit.y) <= 2,
+      );
+      if (!threatened && !holdsSettlement) return 1;
+      return (holdsSettlement ? 26 : 0) + (threatened ? 20 : 0);
     }
 
     case "RECOVER": {

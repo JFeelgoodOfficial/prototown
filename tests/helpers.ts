@@ -98,7 +98,8 @@ export function addUnit(state: GameState, ownerId: number, type: UnitType, x: nu
     veteran: false,
     moved: false,
     attacked: false,
-    embarked: null,
+    fortified: false,
+      embarked: null,
   };
   state.units.push(u);
   return u;

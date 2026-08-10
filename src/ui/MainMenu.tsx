@@ -6,6 +6,7 @@ import { loadGame } from "../game/persistence";
 import { dailyOptions, dailyKey, loadDailyResult, DAILY_DIFFICULTY } from "../game/daily";
 import { TRIBES, tribeById } from "../data/tribes";
 import UnitPortrait from "./UnitPortrait";
+import SavesDialog from "./SavesDialog";
 import type { GameState, WinMode } from "../engine/state";
 
 export default function MainMenu() {
@@ -14,6 +15,7 @@ export default function MainMenu() {
   const [opponents, setOpponents] = useState(1);
   const [difficulty, setDifficulty] = useState<Difficulty>("normal");
   const [winMode, setWinMode] = useState<WinMode>("domination");
+  const [savesOpen, setSavesOpen] = useState(false);
   // Read storage once per menu mount; the in-memory game takes priority when present.
   const stored = useMemo(() => loadGame(), []);
   const daily = useMemo(() => loadDailyResult(), []);
@@ -121,7 +123,15 @@ export default function MainMenu() {
               <span className="block text-xs font-normal text-white/50">{resumeInfo}</span>
             </button>
           )}
+          <button
+            className="w-full rounded-xl bg-white/5 py-2 text-sm font-semibold text-white/70 hover:bg-white/15"
+            onClick={() => setSavesOpen(true)}
+          >
+            Saved games
+          </button>
         </div>
+
+        {savesOpen && <SavesDialog onClose={() => setSavesOpen(false)} />}
 
         <p className="mt-5 text-center text-xs text-white/35">
           Tap to move · drag to pan · pinch or scroll to zoom. Capture villages, grow cities, research, and out-fight
