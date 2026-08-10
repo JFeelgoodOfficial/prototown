@@ -1,17 +1,19 @@
 import type { GameState } from "../engine/state";
-import { serialize, deserialize } from "../engine/serialize";
+import { serialize, deserialize, type LoadedSave } from "../engine/serialize";
 
 const KEY = "polyforge-save-v1";
 
-export function saveGame(state: GameState): void {
+export function saveGame(state: GameState, aggression: number): boolean {
   try {
-    localStorage.setItem(KEY, serialize(state, Date.now()));
+    localStorage.setItem(KEY, serialize(state, Date.now(), aggression));
+    return true;
   } catch {
     // storage full or unavailable — playing on without autosave is fine
+    return false;
   }
 }
 
-export function loadGame(): GameState | null {
+export function loadGame(): LoadedSave | null {
   try {
     const raw = localStorage.getItem(KEY);
     if (!raw) return null;

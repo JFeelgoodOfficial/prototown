@@ -1,10 +1,11 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useGame } from "./store";
 import type { Difficulty } from "../game/controller";
-import { hasSave } from "../game/persistence";
-import { TRIBES } from "../data/tribes";
+import { HUMAN_ID } from "../game/controller";
+import { loadGame } from "../game/persistence";
+import { TRIBES, tribeById } from "../data/tribes";
 import UnitPortrait from "./UnitPortrait";
-import type { WinMode } from "../engine/state";
+import type { GameState, WinMode } from "../engine/state";
 
 export default function MainMenu() {
   const game = useGame();
@@ -12,7 +13,13 @@ export default function MainMenu() {
   const [opponents, setOpponents] = useState(1);
   const [difficulty, setDifficulty] = useState<Difficulty>("normal");
   const [winMode, setWinMode] = useState<WinMode>("domination");
-  const canContinue = hasSave() || game.state !== null;
+  // Read storage once per menu mount; the in-memory game takes priority when present.
+  const stored = useMemo(() => loadGame(), []);
+  const resumeInfo = game.state
+    ? describeGame(game.state, game.lastSavedAt)
+    : stored
+      ? describeGame(stored.state, stored.savedAt)
+      : null;
 
   const start = () => {
     const size = opponents === 1 ? 11 : opponents === 2 ? 14 : 16;
@@ -85,7 +92,7 @@ export default function MainMenu() {
           >
             New game
           </button>
-          {canContinue && (
+          {resumeInfo && (
             <button
               className="w-full rounded-xl bg-white/10 py-2.5 font-semibold hover:bg-white/20"
               onClick={() => {
@@ -94,16 +101,37 @@ export default function MainMenu() {
               }}
             >
               Continue
+              <span className="block text-xs font-normal text-white/50">{resumeInfo}</span>
             </button>
           )}
         </div>
 
         <p className="mt-5 text-center text-xs text-white/35">
-          Move with clicks · drag to pan · scroll to zoom. Capture villages, grow cities, research, and out-fight the AI.
+          Tap to move · drag to pan · pinch or scroll to zoom. Capture villages, grow cities, research, and out-fight
+          the AI.
         </p>
       </div>
     </div>
   );
+}
+
+/** One-line summary of a saved or in-progress game for the Continue button. */
+function describeGame(state: GameState, savedAt: number | null): string {
+  const human = state.players.find((p) => p.id === HUMAN_ID);
+  const parts = [`Turn ${state.turn}`];
+  if (human) parts.push(tribeById(human.tribeId).name);
+  const when = savedAt ? relativeTime(savedAt) : null;
+  if (when) parts.push(`saved ${when}`);
+  return parts.join(" · ");
+}
+
+function relativeTime(at: number): string {
+  const mins = Math.floor((Date.now() - at) / 60000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  return new Date(at).toLocaleDateString();
 }
 
 function Swatch({ color }: { color: string }) {

@@ -38,7 +38,10 @@ class GameController {
   floats: FloatEffect[] = [];
   aiBusy = false;
   revealAll = false;
+  /** Timestamp of the last successful autosave, for the "Saved" indicator. */
+  lastSavedAt: number | null = null;
 
+  private aggression = DIFFICULTY_AGGRESSION.normal;
   private agents = new Map<number, AiAgent>();
   private version = 0;
   private listeners = new Set<() => void>();
@@ -58,28 +61,29 @@ class GameController {
   startNewGame(opts: NewGameOptions, difficulty: Difficulty): void {
     this.state = newGame(opts);
     this.agents.clear();
-    const aggression = DIFFICULTY_AGGRESSION[difficulty];
+    this.aggression = DIFFICULTY_AGGRESSION[difficulty];
     for (const p of this.state.players) {
-      if (!p.isHuman) this.agents.set(p.id, new HeuristicAgent({ aggression }));
+      if (!p.isHuman) this.agents.set(p.id, new HeuristicAgent({ aggression: this.aggression }));
     }
     this.screen = "game";
     this.selectedUnitId = null;
     this.selectedTile = null;
     this.floats = [];
     this.refreshLegal();
-    saveGame(this.state);
+    this.persist();
     this.notify();
   }
 
   continueGame(): boolean {
     const loaded = loadGame();
     if (!loaded) return false;
-    this.state = loaded;
+    this.state = loaded.state;
     this.agents.clear();
-    for (const p of loaded.players) {
-      if (!p.isHuman) this.agents.set(p.id, new HeuristicAgent({ aggression: 1 }));
+    this.aggression = loaded.aggression;
+    for (const p of this.state.players) {
+      if (!p.isHuman) this.agents.set(p.id, new HeuristicAgent({ aggression: this.aggression }));
     }
-    this.screen = loaded.winnerId !== null ? "gameover" : "game";
+    this.screen = this.state.winnerId !== null ? "gameover" : "game";
     this.refreshLegal();
     this.notify();
     if (this.state.currentPlayerId !== HUMAN_ID && this.state.winnerId === null) {
@@ -107,8 +111,21 @@ class GameController {
   abandonGame(): void {
     clearSave();
     this.state = null;
+    this.lastSavedAt = null;
     this.screen = "menu";
     this.notify();
+  }
+
+  /** Write the current game to storage, recording when it happened. */
+  private persist(): void {
+    if (!this.state) return;
+    if (saveGame(this.state, this.aggression)) this.lastSavedAt = Date.now();
+  }
+
+  /** Flush a save outside the normal action flow (tab hidden, page unloading). */
+  saveNow(): void {
+    if (!this.state || this.state.winnerId !== null) return;
+    this.persist();
   }
 
   /** Dispatch a human action. */
@@ -123,7 +140,7 @@ class GameController {
       this.screen = "gameover";
       clearSave();
     } else {
-      saveGame(this.state);
+      this.persist();
     }
     this.notify();
     if (this.state.currentPlayerId !== HUMAN_ID && this.state.winnerId === null) {
@@ -232,7 +249,7 @@ class GameController {
           this.screen = "gameover";
           clearSave();
         } else {
-          saveGame(this.state);
+          this.persist();
         }
       }
       this.notify();
@@ -274,4 +291,11 @@ declare global {
     __pf?: GameController;
   }
 }
-if (typeof window !== "undefined") window.__pf = controller;
+if (typeof window !== "undefined") {
+  window.__pf = controller;
+  // Mobile browsers can discard a backgrounded tab without warning; flush then.
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden) controller.saveNow();
+  });
+  window.addEventListener("pagehide", () => controller.saveNow());
+}
