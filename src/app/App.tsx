@@ -1,11 +1,20 @@
 import { useGame } from "../ui/store";
-import MainMenu from "../ui/MainMenu";
+import TitleScreen from "../ui/TitleScreen";
 import GameScreen from "../ui/GameScreen";
 import GameOverScreen from "../ui/GameOverScreen";
+import OrientationGate from "../ui/OrientationGate";
 
 export default function App() {
   const game = useGame();
-  if (game.screen === "game" && game.state) return <GameScreen />;
-  if (game.screen === "gameover" && game.state) return <GameOverScreen />;
-  return <MainMenu />;
+  return (
+    <OrientationGate>
+      {game.screen === "game" && game.state ? (
+        <GameScreen />
+      ) : game.screen === "gameover" && game.state ? (
+        <GameOverScreen />
+      ) : (
+        <TitleScreen />
+      )}
+    </OrientationGate>
+  );
 }

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useGame } from "./store";
 import { controller, HUMAN_ID, type UnitAnim } from "../game/controller";
-import { render, type ViewOptions } from "../render/renderer";
+import { render, pickTile, type ViewOptions } from "../render/renderer";
 import { renderMinimap, minimapToGrid } from "../render/minimap";
 import { worldToGrid, gridToWorld } from "../render/iso";
 import {
@@ -167,11 +167,15 @@ export default function GameScreen() {
     let pinchDist = 0;
     let pinchMid: [number, number] = [0, 0];
 
+    // Tile tops stand at their own height, so the hit test has to undo the lift
+    // the renderer applied — a flat inverse would pick the tile below the cursor.
     const toGrid = (clientX: number, clientY: number): [number, number] => {
       const rect = canvas.getBoundingClientRect();
       const cam = cameraRef.current!;
       const [wx, wy] = screenToWorld(cam, clientX - rect.left, clientY - rect.top, rect.width, rect.height);
-      return worldToGrid(wx, wy);
+      const s = controller.state;
+      if (!s) return worldToGrid(wx, wy);
+      return pickTile(s, wx, wy, controller.revealAll ? undefined : playerById(s, HUMAN_ID).explored);
     };
 
     const pinchOf = (): { dist: number; mid: [number, number] } | null => {
