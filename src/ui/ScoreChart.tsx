@@ -1,7 +1,6 @@
 import type { GameState } from "../engine/state";
 import { playerScore } from "../engine/score";
 import { tribeById } from "../data/tribes";
-import { HUMAN_ID } from "../game/controller";
 
 /**
  * Score per tribe over the game. The tribe colours are fixed by the game's
@@ -17,7 +16,7 @@ const W = 520;
 const H = 190;
 const PAD = { top: 12, right: 96, bottom: 26, left: 44 };
 
-export default function ScoreChart({ state }: { state: GameState }) {
+export default function ScoreChart({ state, meId }: { state: GameState; meId: number }) {
   const history = state.scoreHistory ?? [];
   const series = state.players.map((p, i) => ({
     playerId: p.id,
@@ -104,7 +103,7 @@ export default function ScoreChart({ state }: { state: GameState }) {
               )}
               <text x={sx(last.turn) + 12} y={ly + 4} fontSize="11" fill="rgba(255,255,255,0.75)" fontWeight="600">
                 {s.tribe.name}
-                {s.playerId === HUMAN_ID ? " (you)" : ""}
+                {s.playerId === meId ? " (you)" : ""}
               </text>
             </g>
           );

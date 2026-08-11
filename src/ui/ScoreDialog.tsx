@@ -1,5 +1,4 @@
 import { useGame } from "./store";
-import { HUMAN_ID } from "../game/controller";
 import { playerScore, scoreBreakdown } from "../engine/score";
 import { tribeById } from "../data/tribes";
 import ScoreChart from "./ScoreChart";
@@ -8,8 +7,8 @@ export default function ScoreDialog({ onClose }: { onClose: () => void }) {
   const game = useGame();
   const s = game.state;
   if (!s) return null;
-  const parts = scoreBreakdown(s, HUMAN_ID);
-  const total = playerScore(s, HUMAN_ID);
+  const parts = scoreBreakdown(s, game.localSeat);
+  const total = playerScore(s, game.localSeat);
   const standings = [...s.players].sort((a, b) => playerScore(s, b.id) - playerScore(s, a.id));
 
   return (
@@ -46,7 +45,7 @@ export default function ScoreDialog({ onClose }: { onClose: () => void }) {
 
         {s.scoreHistory.length >= 2 && (
           <div className="mt-5">
-            <ScoreChart state={s} />
+            <ScoreChart state={s} meId={game.localSeat} />
           </div>
         )}
 
@@ -59,7 +58,7 @@ export default function ScoreDialog({ onClose }: { onClose: () => void }) {
                 <div key={p.id} className="flex justify-between rounded-lg bg-white/5 px-3 py-1.5 text-sm">
                   <span className="font-semibold" style={{ color: tribe.color }}>
                     {tribe.name}
-                    {p.id === HUMAN_ID ? " (you)" : ""}
+                    {p.id === game.localSeat ? " (you)" : ""}
                     {!p.alive ? " ☠" : ""}
                   </span>
                   <span className="tabular-nums">{playerScore(s, p.id)}</span>

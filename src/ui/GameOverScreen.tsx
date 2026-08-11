@@ -1,19 +1,23 @@
+import { useState } from "react";
 import { useGame } from "./store";
-import { HUMAN_ID } from "../game/controller";
 import { playerScore, scoreBreakdown } from "../engine/score";
 import { tribeById } from "../data/tribes";
 import { dailySeedForToday, recordDailyResult } from "../game/daily";
+import { gameHash } from "../net/types";
+import { configForNewGame } from "../net/replay";
 import ScoreChart from "./ScoreChart";
 
 export default function GameOverScreen() {
   const game = useGame();
+  const [rematchBusy, setRematchBusy] = useState(false);
+  const [rematchError, setRematchError] = useState(false);
   const s = game.state;
   if (!s || s.winnerId === null) return null;
-  const humanWon = s.winnerId === HUMAN_ID;
+  const humanWon = s.winnerId === game.localSeat;
   const scores = [...s.players].sort((a, b) => playerScore(s, b.id) - playerScore(s, a.id));
-  const breakdown = scoreBreakdown(s, HUMAN_ID);
-  const myScore = playerScore(s, HUMAN_ID);
-  const wasDaily = s.seed === dailySeedForToday();
+  const breakdown = scoreBreakdown(s, game.localSeat);
+  const myScore = playerScore(s, game.localSeat);
+  const wasDaily = game.mode === "local" && s.seed === dailySeedForToday();
   if (wasDaily) recordDailyResult(myScore, humanWon);
 
   return (
@@ -31,7 +35,7 @@ export default function GameOverScreen() {
 
         {s.scoreHistory.length >= 2 && (
           <div className="mt-5">
-            <ScoreChart state={s} />
+            <ScoreChart state={s} meId={game.localSeat} />
           </div>
         )}
 
@@ -42,7 +46,7 @@ export default function GameOverScreen() {
               <div key={p.id} className="flex justify-between rounded-lg bg-white/5 px-3 py-1.5 text-sm">
                 <span className="font-semibold" style={{ color: tribe.color }}>
                   {tribe.name}
-                  {p.id === HUMAN_ID ? " (you)" : ""}
+                  {p.id === game.localSeat ? " (you)" : ""}
                   {!p.alive ? " ☠" : ""}
                 </span>
                 <span className="tabular-nums">{playerScore(s, p.id)}</span>
@@ -66,8 +70,38 @@ export default function GameOverScreen() {
           </div>
         </div>
 
+        {game.mode === "online" && game.online && game.onlineConfig && (
+          <button
+            className="mt-6 w-full rounded-xl bg-sky-600 py-3 text-lg font-bold hover:bg-sky-500 disabled:opacity-60"
+            disabled={rematchBusy}
+            onClick={() => {
+              const online = game.online!;
+              const config = game.onlineConfig!;
+              const ready = online.rematchReady();
+              if (ready) {
+                window.location.hash = gameHash(ready);
+                return;
+              }
+              setRematchBusy(true);
+              setRematchError(false);
+              const aiCount = config.tribes.length - config.humanSeats;
+              void online
+                .rematch(configForNewGame(aiCount, config.difficulty, config.winMode))
+                .then((seat) => {
+                  window.location.hash = gameHash(seat);
+                })
+                .catch(() => setRematchError(true))
+                .finally(() => setRematchBusy(false));
+            }}
+          >
+            {rematchBusy ? "Setting up…" : game.online.rematchReady() ? "Join the rematch" : "Rematch — same rivals, new map"}
+          </button>
+        )}
+        {rematchError && (
+          <p className="mt-2 text-center text-sm text-red-300">Couldn't reach the server — try again in a moment.</p>
+        )}
         <button
-          className="mt-6 w-full rounded-xl bg-emerald-600 py-3 text-lg font-bold hover:bg-emerald-500"
+          className="mt-3 w-full rounded-xl bg-emerald-600 py-3 text-lg font-bold hover:bg-emerald-500"
           onClick={() => game.abandonGame()}
         >
           Back to menu

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useGame } from "./store";
-import { controller, HUMAN_ID, type UnitAnim } from "../game/controller";
+import { controller, type UnitAnim } from "../game/controller";
 import { render, pickTile, type ViewOptions } from "../render/renderer";
 import { renderMinimap, minimapToGrid } from "../render/minimap";
 import { worldToGrid, gridToWorld } from "../render/iso";
@@ -18,6 +18,7 @@ import { watchedMask } from "../engine/fog";
 import TopBar from "./TopBar";
 import SidePanel from "./SidePanel";
 import RewardPicker from "./RewardPicker";
+import OnlineStatusBar from "./OnlineStatusBar";
 
 export default function GameScreen() {
   const game = useGame();
@@ -109,7 +110,7 @@ export default function GameScreen() {
         const dpr = window.devicePixelRatio || 1;
         ctx.save();
         ctx.scale(dpr, dpr);
-        const human = playerById(s, HUMAN_ID);
+        const human = playerById(s, controller.localSeat);
         const now = performance.now();
         controller.floats = controller.floats.filter((f) => now - f.bornAt < 900);
         controller.anims = controller.anims.filter((a) => now - a.bornAt < a.duration);
@@ -134,7 +135,7 @@ export default function GameScreen() {
           camera: cam,
           width: canvas.width / dpr,
           height: canvas.height / dpr,
-          viewerId: HUMAN_ID,
+          viewerId: controller.localSeat,
           explored: human.explored,
           watched: derived.watched,
           selectedUnitId: selected,
@@ -175,7 +176,7 @@ export default function GameScreen() {
       const [wx, wy] = screenToWorld(cam, clientX - rect.left, clientY - rect.top, rect.width, rect.height);
       const s = controller.state;
       if (!s) return worldToGrid(wx, wy);
-      return pickTile(s, wx, wy, controller.revealAll ? undefined : playerById(s, HUMAN_ID).explored);
+      return pickTile(s, wx, wy, controller.revealAll ? undefined : playerById(s, controller.localSeat).explored);
     };
 
     const pinchOf = (): { dist: number; mid: [number, number] } | null => {
@@ -410,6 +411,7 @@ export default function GameScreen() {
             Rival tribes are moving…
           </div>
         )}
+        {game.mode === "online" && <OnlineStatusBar />}
       </div>
     </div>
   );
@@ -454,8 +456,8 @@ function Minimap({
               camera: cam,
               viewW: viewRef.current.w,
               viewH: viewRef.current.h,
-              viewerId: HUMAN_ID,
-              explored: playerById(s, HUMAN_ID).explored,
+              viewerId: controller.localSeat,
+              explored: playerById(s, controller.localSeat).explored,
               revealAll: controller.revealAll,
             },
             MINIMAP_SIZE,
@@ -563,7 +565,7 @@ function handleClick([x, y]: [number, number]): void {
   }
 
   const unit = unitAt(s, x, y);
-  if (unit && unit.ownerId === HUMAN_ID) {
+  if (unit && unit.ownerId === controller.localSeat) {
     controller.selectUnit(unit.id === selected ? null : unit.id);
     return;
   }

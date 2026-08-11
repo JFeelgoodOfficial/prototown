@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import { useGame } from "./store";
-import { HUMAN_ID } from "../game/controller";
 import { playerById } from "../engine/state";
 import { playerIncome } from "../engine/economy";
 import { playerScore } from "../engine/score";
@@ -11,6 +10,7 @@ import TechTreeDialog from "./TechTreeDialog";
 import HelpOverlay from "./HelpOverlay";
 import ScoreDialog from "./ScoreDialog";
 import SavesDialog from "./SavesDialog";
+import OnlineBell from "./OnlineBell";
 
 export default function TopBar() {
   const game = useGame();
@@ -24,7 +24,7 @@ export default function TopBar() {
   useEffect(() => onFullscreenChange(() => setFullscreen(isFullscreen())), []);
   const s = game.state;
   if (!s) return null;
-  const me = playerById(s, HUMAN_ID);
+  const me = playerById(s, game.localSeat);
   const tribe = tribeById(me.tribeId);
   const endTurn = game.legal.find((a) => a.type === "END_TURN");
   const idle = game.idleUnits().length;
@@ -35,14 +35,14 @@ export default function TopBar() {
         {tribe.name}
       </span>
       <span title="Stars (income per turn)">
-        ⭐ {me.stars} <span className="text-white/50">(+{playerIncome(s, HUMAN_ID)})</span>
+        ⭐ {me.stars} <span className="text-white/50">(+{playerIncome(s, game.localSeat)})</span>
       </span>
       <button
         className="rounded hover:bg-white/10"
         onClick={() => setScoreOpen(true)}
         title="Where your score comes from"
       >
-        🏆 {playerScore(s, HUMAN_ID)}
+        🏆 {playerScore(s, game.localSeat)}
       </button>
       <span className="text-white/60">
         Turn {s.turn}
@@ -112,18 +112,22 @@ export default function TopBar() {
         >
           ?
         </button>
-        <button
-          className="rounded bg-white/10 px-2 py-1.5 hover:bg-white/20 sm:px-3"
-          onClick={() => setSavesOpen(true)}
-          title="Saved games"
-          aria-label="Saved games"
-        >
-          💾
-        </button>
+        {game.mode === "local" ? (
+          <button
+            className="rounded bg-white/10 px-2 py-1.5 hover:bg-white/20 sm:px-3"
+            onClick={() => setSavesOpen(true)}
+            title="Saved games"
+            aria-label="Saved games"
+          >
+            💾
+          </button>
+        ) : (
+          <OnlineBell />
+        )}
         <button
           className="rounded bg-white/10 px-2 py-1.5 hover:bg-white/20 sm:px-3"
           onClick={() => game.backToMenu()}
-          title="Back to menu (game is autosaved)"
+          title={game.mode === "online" ? "Leave — the game stays on the server, reopen it from your link" : "Back to menu (game is autosaved)"}
         >
           Menu
         </button>

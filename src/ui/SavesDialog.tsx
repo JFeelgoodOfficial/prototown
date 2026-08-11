@@ -1,7 +1,6 @@
 import { useRef, useState } from "react";
 import { useGame } from "./store";
-import { HUMAN_ID } from "../game/controller";
-import { listSlots, type SavedGame } from "../game/persistence";
+import { listSlots, LOCAL_HUMAN, type SavedGame } from "../game/persistence";
 import { tribeById } from "../data/tribes";
 
 export default function SavesDialog({ onClose }: { onClose: () => void }) {
@@ -152,7 +151,7 @@ export default function SavesDialog({ onClose }: { onClose: () => void }) {
 
 function describe(slot: SavedGame | null): string {
   if (!slot) return "Empty";
-  const human = slot.state.players.find((p) => p.id === HUMAN_ID);
+  const human = slot.state.players.find((p) => p.id === LOCAL_HUMAN);
   const parts = [`Turn ${slot.state.turn}`];
   if (human) parts.push(tribeById(human.tribeId).name);
   parts.push(slot.difficulty);
