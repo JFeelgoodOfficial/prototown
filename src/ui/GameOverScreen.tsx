@@ -1,11 +1,16 @@
+import { useState } from "react";
 import { useGame } from "./store";
 import { playerScore, scoreBreakdown } from "../engine/score";
 import { tribeById } from "../data/tribes";
 import { dailySeedForToday, recordDailyResult } from "../game/daily";
+import { gameHash } from "../net/types";
+import { configForNewGame } from "../net/replay";
 import ScoreChart from "./ScoreChart";
 
 export default function GameOverScreen() {
   const game = useGame();
+  const [rematchBusy, setRematchBusy] = useState(false);
+  const [rematchError, setRematchError] = useState(false);
   const s = game.state;
   if (!s || s.winnerId === null) return null;
   const humanWon = s.winnerId === game.localSeat;
@@ -65,8 +70,38 @@ export default function GameOverScreen() {
           </div>
         </div>
 
+        {game.mode === "online" && game.online && game.onlineConfig && (
+          <button
+            className="mt-6 w-full rounded-xl bg-sky-600 py-3 text-lg font-bold hover:bg-sky-500 disabled:opacity-60"
+            disabled={rematchBusy}
+            onClick={() => {
+              const online = game.online!;
+              const config = game.onlineConfig!;
+              const ready = online.rematchReady();
+              if (ready) {
+                window.location.hash = gameHash(ready);
+                return;
+              }
+              setRematchBusy(true);
+              setRematchError(false);
+              const aiCount = config.tribes.length - config.humanSeats;
+              void online
+                .rematch(configForNewGame(aiCount, config.difficulty, config.winMode))
+                .then((seat) => {
+                  window.location.hash = gameHash(seat);
+                })
+                .catch(() => setRematchError(true))
+                .finally(() => setRematchBusy(false));
+            }}
+          >
+            {rematchBusy ? "Setting up…" : game.online.rematchReady() ? "Join the rematch" : "Rematch — same rivals, new map"}
+          </button>
+        )}
+        {rematchError && (
+          <p className="mt-2 text-center text-sm text-red-300">Couldn't reach the server — try again in a moment.</p>
+        )}
         <button
-          className="mt-6 w-full rounded-xl bg-emerald-600 py-3 text-lg font-bold hover:bg-emerald-500"
+          className="mt-3 w-full rounded-xl bg-emerald-600 py-3 text-lg font-bold hover:bg-emerald-500"
           onClick={() => game.abandonGame()}
         >
           Back to menu

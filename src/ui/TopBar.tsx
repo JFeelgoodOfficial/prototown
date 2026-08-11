@@ -10,6 +10,7 @@ import TechTreeDialog from "./TechTreeDialog";
 import HelpOverlay from "./HelpOverlay";
 import ScoreDialog from "./ScoreDialog";
 import SavesDialog from "./SavesDialog";
+import OnlineBell from "./OnlineBell";
 
 export default function TopBar() {
   const game = useGame();
@@ -111,7 +112,7 @@ export default function TopBar() {
         >
           ?
         </button>
-        {game.mode === "local" && (
+        {game.mode === "local" ? (
           <button
             className="rounded bg-white/10 px-2 py-1.5 hover:bg-white/20 sm:px-3"
             onClick={() => setSavesOpen(true)}
@@ -120,6 +121,8 @@ export default function TopBar() {
           >
             💾
           </button>
+        ) : (
+          <OnlineBell />
         )}
         <button
           className="rounded bg-white/10 px-2 py-1.5 hover:bg-white/20 sm:px-3"

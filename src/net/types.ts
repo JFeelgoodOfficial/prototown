@@ -54,12 +54,22 @@ export type OnlineStatus = "connecting" | "live" | "syncing" | "offline" | "corr
  */
 export interface OnlineSessionHandle {
   readonly status: OnlineStatus;
+  /** This client's claim on its seat (game id + seat + secret token). */
+  readonly ref: SeatRef;
+  /** Server time of the last action, for the abandoned-turn countdown. */
+  readonly lastMoveAt: number;
   /** Report an action this client just applied to its own state. */
   onLocalAction(action: Action): void;
   /** Seats this client should advance with the local AI (AI seats + takeovers). */
   drivesSeat(seatNo: number): boolean;
   /** How many actions have been applied to the local state. */
   localCount(): number;
+  /** Hand the absent current player's seat to the AI (server checks the 24h rule). */
+  requestTakeover(targetSeat: number): Promise<void>;
+  /** Start (or join) a rematch; resolves to this player's seat in the new game. */
+  rematch(config: OnlineConfig): Promise<SeatRef>;
+  /** Set when the other player already created a rematch. */
+  rematchReady(): SeatRef | null;
   detach(): void;
 }
 

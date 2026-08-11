@@ -6,6 +6,8 @@ import type { ActionRow, GameRow, OnlineConfig, OnlineSessionHandle, OnlineStatu
 import { buildState, applyStep, ReplayError } from "./replay";
 import * as api from "./client";
 import { NetError } from "./client";
+import { rememberGame } from "./registry";
+import { tribeById } from "../data/tribes";
 
 /** Thrown when a game was created by a build with a different engine version. */
 export class VersionError extends Error {
@@ -131,6 +133,20 @@ export class OnlineSession implements OnlineSessionHandle {
     this.controller.maybePumpOnline();
   }
 
+  private nextGameId: string | null = null;
+
+  /** Start (or join) the rematch. Idempotent server-side: first config wins. */
+  async rematch(config: OnlineConfig): Promise<SeatRef> {
+    const newId = await api.createRematch(this.ref, config);
+    this.nextGameId = newId;
+    return { gameId: newId, seatNo: this.ref.seatNo, token: this.ref.token };
+  }
+
+  rematchReady(): SeatRef | null {
+    if (!this.nextGameId) return null;
+    return { gameId: this.nextGameId, seatNo: this.ref.seatNo, token: this.ref.token };
+  }
+
   private setStatus(status: OnlineStatus): void {
     if (this.status === status || this.detached) return;
     this.status = status;
@@ -219,6 +235,7 @@ export class OnlineSession implements OnlineSessionHandle {
   private applyGameRow(row: GameRow): void {
     this.takeovers = new Set(row.takeover_seats ?? []);
     this.lastMoveAt = Date.parse(row.updated_at) || this.lastMoveAt;
+    this.nextGameId = row.next_game_id ?? this.nextGameId;
     if (row.action_count > this.localCount()) void this.reconcile();
   }
 
@@ -333,5 +350,13 @@ export async function openOnlineGame(controller: GameController, ref: SeatRef): 
   const session = new OnlineSession(controller, row.config, ref, row, loaded.count);
   controller.startOnlineGame(loaded.state, ref.seatNo, row.config, session);
   await session.start();
+  // every opened game lands in the local list, so links survive lost chats
+  const mine = tribeById(row.config.tribes[ref.seatNo] ?? row.config.tribes[0]).name;
+  const ai = row.config.tribes.length - row.config.humanSeats;
+  rememberGame({
+    ...ref,
+    label: `${mine} vs friend${ai > 0 ? ` + ${ai} AI` : ""} · ${row.config.winMode}`,
+    createdAt: Date.now(),
+  });
   return session;
 }
