@@ -1,9 +1,18 @@
 # Polyforge
 
-A single-player 4X strategy game in the spirit of The Battle of Polytopia,
-built to play in the browser — you against 1–3 AI tribes. No multiplayer,
-no accounts, no server: the whole game runs client-side and autosaves to
-your browser.
+A 4X strategy game in the spirit of The Battle of Polytopia, built to play
+in the browser — solo against 1–3 AI tribes, or online against a friend.
+Single-player runs entirely client-side with no accounts or server, and
+autosaves to your browser.
+
+**Online multiplayer** is async, Polytopia-mobile style: create a game,
+send your friend their secret link, and take turns whenever suits you —
+iPhone, Android, or desktop, no sign-up. When you're both online it updates
+live; add the game to your home screen and you can get a push notification
+when it's your turn. Games can include up to two AI rivals, and if your
+opponent disappears for a day you can hand their tribe to the AI. Backed by
+a free Supabase project — see [supabase/README.md](supabase/README.md) for
+the one-time setup (skipping it simply hides the "Play online" button).
 
 ## Play
 
@@ -32,6 +41,11 @@ level them up, research the 25-tech tree, and out-fight the AI.
   legal-action API as the human, under the same fog of war.
 - `src/render/` — Canvas 2D isometric renderer with procedural art.
 - `src/ui/` — React components for menus, panels, and dialogs.
+- `src/net/` — online play. Because the engine is deterministic, a game is
+  just its config plus an append-only action log in Postgres; every client
+  replays the log to the identical state, and whoever is online advances
+  the AI seats. `@supabase/supabase-js` is lazy-loaded, so single-player
+  ships none of it.
 
 ## Development
 
