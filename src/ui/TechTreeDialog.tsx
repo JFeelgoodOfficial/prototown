@@ -1,5 +1,4 @@
 import { useGame } from "./store";
-import { HUMAN_ID } from "../game/controller";
 import { playerById, citiesOf } from "../engine/state";
 import { TECHS, techCost } from "../data/techs";
 
@@ -7,8 +6,8 @@ export default function TechTreeDialog({ onClose }: { onClose: () => void }) {
   const game = useGame();
   const s = game.state;
   if (!s) return null;
-  const me = playerById(s, HUMAN_ID);
-  const numCities = citiesOf(s, HUMAN_ID).length;
+  const me = playerById(s, game.localSeat);
+  const numCities = citiesOf(s, game.localSeat).length;
   const branches = ["riding", "organization", "climbing", "fishing", "hunting"];
 
   return (

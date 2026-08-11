@@ -46,15 +46,17 @@ export interface UnitAnim {
 export const MOVE_ANIM_MS = 180;
 export const HIT_ANIM_MS = 260;
 
-export const HUMAN_ID = 0;
 const AI_STEP_MS = 140;
 const AI_ACTION_CAP = 250;
 
 export type { Difficulty };
 
-class GameController {
+export class GameController {
   state: GameState | null = null;
   screen: Screen = "menu";
+  /** Engine player id this client plays as. Always 0 in local games. */
+  localSeat = 0;
+  mode: "local" | "online" = "local";
   selectedUnitId: number | null = null;
   selectedTile: [number, number] | null = null;
   legal: Action[] = [];
@@ -125,8 +127,8 @@ class GameController {
     this.screen = this.state.winnerId !== null ? "gameover" : "game";
     this.refreshLegal();
     this.notify();
-    if (this.state.currentPlayerId !== HUMAN_ID && this.state.winnerId === null) {
-      void this.runAiTurns();
+    if (this.state.currentPlayerId !== this.localSeat && this.state.winnerId === null) {
+      void this.runTurnPump();
     }
   }
 
@@ -192,15 +194,15 @@ class GameController {
     this.refreshLegal();
     this.persist();
     this.notify();
-    if (this.state.currentPlayerId !== HUMAN_ID && this.state.winnerId === null) {
-      void this.runAiTurns();
+    if (this.state.currentPlayerId !== this.localSeat && this.state.winnerId === null) {
+      void this.runTurnPump();
     }
     return true;
   }
 
-  /** Dispatch a human action. */
+  /** Dispatch an action taken by the local player. */
   dispatch(action: Action): void {
-    if (!this.state || this.aiBusy || this.state.currentPlayerId !== HUMAN_ID) return;
+    if (!this.state || this.aiBusy || this.state.currentPlayerId !== this.localSeat) return;
     this.applyWithEffects(action);
     this.selectedTile = null;
     if (action.type !== "MOVE") this.selectedUnitId = null;
@@ -213,8 +215,8 @@ class GameController {
       this.persist();
     }
     this.notify();
-    if (this.state.currentPlayerId !== HUMAN_ID && this.state.winnerId === null) {
-      void this.runAiTurns();
+    if (this.state.currentPlayerId !== this.localSeat && this.state.winnerId === null) {
+      void this.runTurnPump();
     }
   }
 
@@ -236,7 +238,7 @@ class GameController {
   }
 
   private refreshLegal(): void {
-    this.legal = this.state ? computeLegalActions(this.state, HUMAN_ID) : [];
+    this.legal = this.state ? computeLegalActions(this.state, this.localSeat) : [];
   }
 
   /**
@@ -285,15 +287,15 @@ class GameController {
       this.state = applyAction(this.state, action);
       const ruin = this.state.lastRuinReward;
       if (ruin) {
-        this.addFloat(ruin.x, ruin.y, ruin.label, ruin.playerId === HUMAN_ID ? "#ffd75e" : "#c8b79b");
-        playSound(ruin.playerId === HUMAN_ID ? "levelUp" : "capture");
+        this.addFloat(ruin.x, ruin.y, ruin.label, ruin.playerId === this.localSeat ? "#ffd75e" : "#c8b79b");
+        playSound(ruin.playerId === this.localSeat ? "levelUp" : "capture");
       }
     } else {
       const before = this.state;
       this.state = applyAction(before, action);
       if (action.type === "CAPTURE") playSound("capture");
       else if (action.type === "CHOOSE_REWARD") playSound("levelUp");
-      else if (action.type === "END_TURN" && before.currentPlayerId === HUMAN_ID) playSound("endTurn");
+      else if (action.type === "END_TURN" && before.currentPlayerId === this.localSeat) playSound("endTurn");
     }
   }
 
@@ -310,8 +312,8 @@ class GameController {
   /** Own units that can still do something this turn. */
   idleUnits(): number[] {
     const s = this.state;
-    if (!s || s.currentPlayerId !== HUMAN_ID || this.aiBusy) return [];
-    return unitsOf(s, HUMAN_ID)
+    if (!s || s.currentPlayerId !== this.localSeat || this.aiBusy) return [];
+    return unitsOf(s, this.localSeat)
       .filter((u) => !u.moved || !u.attacked)
       .map((u) => u.id);
   }
@@ -335,8 +337,17 @@ class GameController {
     if (this.floats.length > 40) this.floats.splice(0, this.floats.length - 40);
   }
 
-  /** Run AI players until control returns to the human (or the game ends). */
-  private async runAiTurns(): Promise<void> {
+  /**
+   * Which seats this client is responsible for advancing. In local games that
+   * is every seat but the player's own; online it is only the AI seats this
+   * client has been told to drive (remote humans move themselves).
+   */
+  protected drivesSeat(pid: number): boolean {
+    return pid !== this.localSeat;
+  }
+
+  /** Advance seats this client drives until control returns to a seat it doesn't (or the game ends). */
+  protected async runTurnPump(): Promise<void> {
     if (!this.state || this.aiBusy) return;
     this.aiBusy = true;
     this.notify();
@@ -345,7 +356,8 @@ class GameController {
       while (
         this.state &&
         this.state.winnerId === null &&
-        this.state.currentPlayerId !== HUMAN_ID &&
+        this.state.currentPlayerId !== this.localSeat &&
+        this.drivesSeat(this.state.currentPlayerId) &&
         guard < AI_ACTION_CAP * 4
       ) {
         guard++;
@@ -389,11 +401,11 @@ class GameController {
     }
   }
 
-  /** Only pause for AI actions the human can actually see. */
+  /** Only pause for AI actions the local player can actually see. */
   private isActionVisible(action: Action): boolean {
     if (!this.state) return false;
-    const human = playerById(this.state, HUMAN_ID);
-    const seen = (x: number, y: number) => human.explored[y * this.state!.size + x] === 1;
+    const viewer = playerById(this.state, this.localSeat);
+    const seen = (x: number, y: number) => viewer.explored[y * this.state!.size + x] === 1;
     switch (action.type) {
       case "MOVE":
         return seen(action.x, action.y);

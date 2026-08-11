@@ -1,8 +1,7 @@
 import { useMemo, useState } from "react";
 import { useGame } from "./store";
 import type { Difficulty } from "../game/controller";
-import { HUMAN_ID } from "../game/controller";
-import { loadGame } from "../game/persistence";
+import { loadGame, LOCAL_HUMAN } from "../game/persistence";
 import { dailyOptions, dailyKey, loadDailyResult, DAILY_DIFFICULTY } from "../game/daily";
 import { TRIBES, tribeById } from "../data/tribes";
 import UnitPortrait from "./UnitPortrait";
@@ -153,7 +152,7 @@ export default function MainMenu({ onBack }: { onBack?: () => void }) {
 
 /** One-line summary of a saved or in-progress game for the Continue button. */
 function describeGame(state: GameState, savedAt: number | null): string {
-  const human = state.players.find((p) => p.id === HUMAN_ID);
+  const human = state.players.find((p) => p.id === LOCAL_HUMAN);
   const parts = [`Turn ${state.turn}`];
   if (human) parts.push(tribeById(human.tribeId).name);
   const when = savedAt ? relativeTime(savedAt) : null;

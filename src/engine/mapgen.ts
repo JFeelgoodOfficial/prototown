@@ -9,9 +9,11 @@ import type { WinMode } from "./state";
 export interface NewGameOptions {
   seed: number;
   size: number;
-  /** tribe ids; index 0 is the human player */
+  /** tribe ids; the first `humanSeats` are human players */
   tribes: string[];
   winMode: WinMode;
+  /** How many leading seats are humans. Defaults to 1 (local play). */
+  humanSeats?: number;
 }
 
 /** Smooth value noise in [0,1] from a coarse random lattice. */
@@ -208,7 +210,7 @@ export function newGame(opts: NewGameOptions): GameState {
     const player: PlayerState = {
       id: i,
       tribeId: tribe.id,
-      isHuman: i === 0,
+      isHuman: i < (opts.humanSeats ?? 1),
       stars: INITIAL_STARS,
       techs: [tribe.startingTech],
       explored: new Array(size * size).fill(0),

@@ -1,5 +1,4 @@
 import { useGame } from "./store";
-import { HUMAN_ID } from "../game/controller";
 import { unitById, tileAt, cityById, unitAt, type GameState } from "../engine/state";
 import { UNITS, NAVAL, type UnitType } from "../data/units";
 import { HARVEST_DEFS, CITY_IMPROVEMENTS } from "../data/constants";
@@ -53,7 +52,7 @@ export default function SidePanel() {
     const tile = tileAt(s, x, y);
     const city = tile.cityHere !== null ? cityById(s, tile.cityHere) : undefined;
 
-    if (city && city.ownerId === HUMAN_ID) {
+    if (city && city.ownerId === game.localSeat) {
       const trains = game.legal.filter((a) => a.type === "TRAIN" && a.cityId === city.id);
       const improvements = game.legal.filter(
         (a) => a.type === "BUILD_IMPROVEMENT" && a.cityId === city.id,

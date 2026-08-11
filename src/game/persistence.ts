@@ -7,6 +7,9 @@ const KEY = "polyforge-save-v1";
 const SLOT_PREFIX = "polyforge-slot-";
 export const SLOT_COUNT = 3;
 
+/** Local saves are always single-player games where the human is seat 0. */
+export const LOCAL_HUMAN = 0;
+
 export interface SavedGame {
   state: GameState;
   savedAt: number;

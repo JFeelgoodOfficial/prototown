@@ -1,5 +1,4 @@
 import { useGame } from "./store";
-import { HUMAN_ID } from "../game/controller";
 import { playerScore, scoreBreakdown } from "../engine/score";
 import { tribeById } from "../data/tribes";
 import { dailySeedForToday, recordDailyResult } from "../game/daily";
@@ -9,11 +8,11 @@ export default function GameOverScreen() {
   const game = useGame();
   const s = game.state;
   if (!s || s.winnerId === null) return null;
-  const humanWon = s.winnerId === HUMAN_ID;
+  const humanWon = s.winnerId === game.localSeat;
   const scores = [...s.players].sort((a, b) => playerScore(s, b.id) - playerScore(s, a.id));
-  const breakdown = scoreBreakdown(s, HUMAN_ID);
-  const myScore = playerScore(s, HUMAN_ID);
-  const wasDaily = s.seed === dailySeedForToday();
+  const breakdown = scoreBreakdown(s, game.localSeat);
+  const myScore = playerScore(s, game.localSeat);
+  const wasDaily = game.mode === "local" && s.seed === dailySeedForToday();
   if (wasDaily) recordDailyResult(myScore, humanWon);
 
   return (
@@ -31,7 +30,7 @@ export default function GameOverScreen() {
 
         {s.scoreHistory.length >= 2 && (
           <div className="mt-5">
-            <ScoreChart state={s} />
+            <ScoreChart state={s} meId={game.localSeat} />
           </div>
         )}
 
@@ -42,7 +41,7 @@ export default function GameOverScreen() {
               <div key={p.id} className="flex justify-between rounded-lg bg-white/5 px-3 py-1.5 text-sm">
                 <span className="font-semibold" style={{ color: tribe.color }}>
                   {tribe.name}
-                  {p.id === HUMAN_ID ? " (you)" : ""}
+                  {p.id === game.localSeat ? " (you)" : ""}
                   {!p.alive ? " ☠" : ""}
                 </span>
                 <span className="tabular-nums">{playerScore(s, p.id)}</span>

@@ -46,6 +46,21 @@ describe("map generation", () => {
     }
   });
 
+  it("marks the first humanSeats players as human", () => {
+    const solo = newGame(opts(7));
+    expect(solo.players.map((p) => p.isHuman)).toEqual([true, false, false]);
+    const duo = newGame({ ...opts(7), humanSeats: 2 });
+    expect(duo.players.map((p) => p.isHuman)).toEqual([true, true, false]);
+  });
+
+  it("generates the identical map regardless of humanSeats", () => {
+    const solo = newGame(opts(7));
+    const duo = newGame({ ...opts(7), humanSeats: 2 });
+    const strip = (s: ReturnType<typeof newGame>) =>
+      JSON.stringify({ ...s, players: s.players.map((p) => ({ ...p, isHuman: undefined })) });
+    expect(strip(duo)).toBe(strip(solo));
+  });
+
   it("players start with their tribe's tech and 5 stars", () => {
     const s = newGame(opts(3));
     expect(s.players[0].techs).toEqual(["organization"]);
