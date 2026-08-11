@@ -32,11 +32,28 @@ export const POINTS_PER_TILE_REVEALED = 5;
 export const POINTS_PER_UNIT_COST = 5;
 export const POINTS_PER_TECH_TIER = 100;
 
-// Harvest / building costs (stars) and population yields
+// Tech effects
+/** Roads: cost of a step between two land tiles of your own territory. */
+export const ROAD_MOVE_COST = 0.5;
+/** Trade: extra stars per turn from every city. */
+export const TRADE_INCOME_PER_CITY = 1;
+/** Strategy: extra units every city can support. */
+export const STRATEGY_CAPACITY_BONUS = 1;
+/** Philosophy: what a tech costs once you know it. */
+export const PHILOSOPHY_DISCOUNT = 0.8;
+/** Whaling: stars a whale pays out when harvested. */
+export const WHALE_STARS = 10;
+/** Fraction of shallow-water resources near a settlement that are whales. */
+export const WHALE_SHARE = 1 / 3;
+/** Parks a single city may ever hold, however they were come by. */
+export const MAX_PARKS_PER_CITY = 2;
+
+// Harvest / building costs (stars), population yields, and star payouts
 export const HARVEST_DEFS = {
-  fruit: { cost: 2, pop: 1, tech: "organization" },
-  animal: { cost: 2, pop: 1, tech: "hunting" },
-  fish: { cost: 2, pop: 1, tech: "fishing" },
+  fruit: { cost: 2, pop: 1, stars: 0, tech: "organization" },
+  animal: { cost: 2, pop: 1, stars: 0, tech: "hunting" },
+  fish: { cost: 2, pop: 1, stars: 0, tech: "fishing" },
+  whale: { cost: 2, pop: 0, stars: WHALE_STARS, tech: "whaling" },
 } as const;
 
 export const BUILDING_DEFS = {
@@ -45,6 +62,17 @@ export const BUILDING_DEFS = {
   mine: { cost: 5, pop: 2, tech: "mining", terrain: "mountain", needsResource: "metal" },
   port: { cost: 7, pop: 1, tech: "sailing", terrain: "water" },
 } as const;
+
+/**
+ * City improvements you can buy outright once the tech is known. These are the
+ * same two things the level-up reward table hands out by chance — Construction
+ * and Spiritualism let you go and get them instead of waiting to be offered.
+ */
+export const CITY_IMPROVEMENTS = {
+  walls: { cost: 8, tech: "construction", name: "City Walls" },
+  park: { cost: 12, tech: "spiritualism", name: "Grand Park" },
+} as const;
+export type CityImprovement = keyof typeof CITY_IMPROVEMENTS;
 
 // City rewards offered on level-up: [option A, option B]
 export const LEVEL_REWARDS: Record<number, [string, string]> = {

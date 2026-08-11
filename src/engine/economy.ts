@@ -1,16 +1,30 @@
 import type { GameState, City } from "./state";
-import { citiesOf, unitsOf } from "./state";
-import { CITY_BASE_INCOME, CAPITAL_INCOME_BONUS, WORKSHOP_INCOME, LEVEL_REWARDS } from "../data/constants";
+import { citiesOf, unitsOf, playerById, hasTech } from "./state";
+import {
+  CITY_BASE_INCOME,
+  CAPITAL_INCOME_BONUS,
+  WORKSHOP_INCOME,
+  LEVEL_REWARDS,
+  TRADE_INCOME_PER_CITY,
+  STRATEGY_CAPACITY_BONUS,
+} from "../data/constants";
 import { abilityOf } from "./tribeAbility";
 
-/** Stars per turn for one city: base + (level-1) + capital + workshop. */
-export function cityIncome(city: City): number {
-  return CITY_BASE_INCOME + (city.level - 1) + (city.isCapital ? CAPITAL_INCOME_BONUS : 0) + (city.workshop ? WORKSHOP_INCOME : 0);
+/** Stars per turn for one city: base + (level-1) + capital + workshop + Trade. */
+export function cityIncome(state: GameState, city: City): number {
+  const trade = hasTech(playerById(state, city.ownerId), "trade") ? TRADE_INCOME_PER_CITY : 0;
+  return (
+    CITY_BASE_INCOME +
+    (city.level - 1) +
+    (city.isCapital ? CAPITAL_INCOME_BONUS : 0) +
+    (city.workshop ? WORKSHOP_INCOME : 0) +
+    trade
+  );
 }
 
 export function playerIncome(state: GameState, playerId: number): number {
   const cities = citiesOf(state, playerId);
-  const base = cities.reduce((sum, c) => sum + cityIncome(c), 0);
+  const base = cities.reduce((sum, c) => sum + cityIncome(state, c), 0);
   // a tribe with no cities left is being eliminated; no stipend for them
   return cities.length === 0 ? 0 : base + abilityOf(state, playerId).incomeBonus;
 }
@@ -25,9 +39,10 @@ export function cityUnitCount(state: GameState, cityId: number): number {
   return state.units.filter((u) => u.homeCityId === cityId).length;
 }
 
-/** Max units a city can support. */
-export function cityCapacity(city: City): number {
-  return city.level + 1;
+/** Max units a city can support: level + 1, and one more with Strategy. */
+export function cityCapacity(state: GameState, city: City): number {
+  const strategy = hasTech(playerById(state, city.ownerId), "strategy") ? STRATEGY_CAPACITY_BONUS : 0;
+  return city.level + 1 + strategy;
 }
 
 /**

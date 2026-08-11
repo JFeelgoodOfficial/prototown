@@ -1,7 +1,8 @@
 import { useGame } from "./store";
 import { HUMAN_ID } from "../game/controller";
-import { unitById, tileAt, cityById, unitAt } from "../engine/state";
+import { unitById, tileAt, cityById, unitAt, type GameState } from "../engine/state";
 import { UNITS, NAVAL, type UnitType } from "../data/units";
+import { HARVEST_DEFS, CITY_IMPROVEMENTS } from "../data/constants";
 import { cityIncome, popForNextLevel, cityUnitCount, cityCapacity } from "../engine/economy";
 import UnitPortrait from "./UnitPortrait";
 import type { Action } from "../engine/actions";
@@ -54,14 +55,18 @@ export default function SidePanel() {
 
     if (city && city.ownerId === HUMAN_ID) {
       const trains = game.legal.filter((a) => a.type === "TRAIN" && a.cityId === city.id);
+      const improvements = game.legal.filter(
+        (a) => a.type === "BUILD_IMPROVEMENT" && a.cityId === city.id,
+      );
       const occupied = unitAt(s, city.x, city.y) !== undefined;
       return (
         <Panel title={`${city.name}${city.isCapital ? " (capital)" : ""} — level ${city.level}`}>
           <div className="text-sm text-white/80">
-            Growth {city.population}/{popForNextLevel(city)} · Income ⭐{cityIncome(city)} · Units{" "}
-            {cityUnitCount(s, city.id)}/{cityCapacity(city)}
+            Growth {city.population}/{popForNextLevel(city)} · Income ⭐{cityIncome(s, city)} · Units{" "}
+            {cityUnitCount(s, city.id)}/{cityCapacity(s, city)}
             {city.walls ? " · Walls" : ""}
             {city.workshop ? " · Workshop" : ""}
+            {city.parks > 0 ? ` · ${city.parks} park${city.parks > 1 ? "s" : ""}` : ""}
           </div>
           <div className="mt-2">
             <div className="mb-1 text-xs font-semibold uppercase text-white/50">Train unit</div>
@@ -70,7 +75,7 @@ export default function SidePanel() {
                 <span className="text-xs text-white/50">
                   {occupied
                     ? "City tile is occupied — move the unit first."
-                    : cityUnitCount(s, city.id) >= cityCapacity(city)
+                    : cityUnitCount(s, city.id) >= cityCapacity(s, city)
                       ? "At unit capacity — level up the city."
                       : "No affordable units. Earn stars or research."}
                 </span>
@@ -80,6 +85,16 @@ export default function SidePanel() {
               ))}
             </div>
           </div>
+          {improvements.length > 0 && (
+            <div className="mt-2">
+              <div className="mb-1 text-xs font-semibold uppercase text-white/50">Build</div>
+              <div className="flex flex-wrap gap-2">
+                {improvements.map((a) => (
+                  <ActionButton key={JSON.stringify(a)} action={a} />
+                ))}
+              </div>
+            </div>
+          )}
         </Panel>
       );
     }
@@ -133,12 +148,12 @@ function ActionButton({ action }: { action: Action }) {
       className="rounded bg-sky-600 px-3 py-1.5 text-sm font-semibold hover:bg-sky-500"
       onClick={() => game.dispatch(action)}
     >
-      {labelFor(action)}
+      {labelFor(action, game.state!)}
     </button>
   );
 }
 
-function labelFor(a: Action): string {
+function labelFor(a: Action, s: GameState): string {
   switch (a.type) {
     case "CAPTURE":
       return "Capture";
@@ -150,10 +165,20 @@ function labelFor(a: Action): string {
       return "Dig in";
     case "UPGRADE_BOAT":
       return `Upgrade to Ship (⭐${NAVAL.ship.upgradeCost})`;
-    case "HARVEST":
-      return "Harvest (⭐2)";
+    case "HARVEST": {
+      // the price and the payout both depend on what is actually on the tile
+      const resource = tileAt(s, a.x, a.y).resource;
+      const def = resource ? HARVEST_DEFS[resource as keyof typeof HARVEST_DEFS] : undefined;
+      if (!def) return "Harvest";
+      const payout = def.stars > 0 ? ` → ⭐${def.stars}` : "";
+      return `Harvest ${resource} (⭐${def.cost})${payout}`;
+    }
     case "BUILD":
       return `Build ${a.building.replace("_", " ")}`;
+    case "BUILD_IMPROVEMENT": {
+      const def = CITY_IMPROVEMENTS[a.improvement];
+      return `${def.name} (⭐${def.cost})`;
+    }
     case "TRAIN":
       return `${UNITS[a.unitType as UnitType].name} (⭐${UNITS[a.unitType as UnitType].cost})`;
     default:

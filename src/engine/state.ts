@@ -1,7 +1,7 @@
 import type { UnitType } from "../data/units";
 
 export type TerrainType = "field" | "forest" | "mountain" | "water" | "ocean";
-export type ResourceType = "fruit" | "animal" | "fish" | "metal" | "crop";
+export type ResourceType = "fruit" | "animal" | "fish" | "whale" | "metal" | "crop";
 export type BuildingType = "lumber_hut" | "farm" | "mine" | "port";
 
 export interface Tile {

@@ -45,11 +45,13 @@ export default function HelpOverlay({ onClose }: { onClose: () => void }) {
           <List
             title="Economy"
             items={[
-              "Cities pay stars every turn — higher level pays more; capitals and workshops pay extra.",
+              "Cities pay stars every turn — higher level pays more; capitals and workshops pay extra. Trade adds one more per city.",
               "Harvest fruit, animals, and fish (needs the matching tech) to grow city population.",
+              "Whales are the exception: with Whaling they pay stars rather than population.",
               "Farms, mines, lumber huts, and ports grow population faster.",
               "Ports are the only way to put to sea — with Sailing they launch ships instead of rafts.",
               "When population fills the bar, the city levels up and you pick a reward.",
+              "Construction and Spiritualism let you simply buy City Walls and Grand Parks instead of waiting to be offered them.",
             ]}
           />
           <List
@@ -59,6 +61,8 @@ export default function HelpOverlay({ onClose }: { onClose: () => void }) {
               "Capture enemy cities the same way — take them all to win by Domination.",
               "Defenders in forests, mountains, or behind walls take much less damage.",
               "Units that survive 3 kills become veterans with extra health.",
+              "With Roads, units move twice as far inside your own borders — and woods and peaks there no longer halt them.",
+              "Strategy lets every city support one more unit.",
             ]}
           />
         </div>
