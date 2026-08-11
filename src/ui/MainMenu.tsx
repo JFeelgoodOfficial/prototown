@@ -9,7 +9,8 @@ import UnitPortrait from "./UnitPortrait";
 import SavesDialog from "./SavesDialog";
 import type { GameState, WinMode } from "../engine/state";
 
-export default function MainMenu() {
+/** The new-game setup, reached from Start on the title screen. */
+export default function MainMenu({ onBack }: { onBack?: () => void }) {
   const game = useGame();
   const [tribeId, setTribeId] = useState(TRIBES[0].id);
   const [opponents, setOpponents] = useState(1);
@@ -36,8 +37,16 @@ export default function MainMenu() {
   return (
     <div className="flex h-full items-center justify-center overflow-auto bg-gradient-to-b from-[#0b1220] to-[#101f38] p-4">
       <div className="w-[min(520px,94vw)] rounded-2xl border border-white/10 bg-[#0f1828]/90 p-6 shadow-2xl">
+        {onBack && (
+          <button
+            className="mb-3 rounded-lg bg-white/10 px-3 py-1.5 text-sm font-semibold hover:bg-white/20"
+            onClick={onBack}
+          >
+            ← Title
+          </button>
+        )}
         <h1 className="text-center text-4xl font-black tracking-tight">
-          Poly<span className="text-sky-400">forge</span>
+          Proto<span className="text-sky-400">town</span>
         </h1>
         <p className="mb-6 mt-1 text-center text-sm text-white/50">
           Explore, expand, and conquer — you against the rival tribes.
