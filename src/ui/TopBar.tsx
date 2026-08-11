@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useGame } from "./store";
 import { HUMAN_ID } from "../game/controller";
 import { playerById } from "../engine/state";
@@ -6,6 +6,7 @@ import { playerIncome } from "../engine/economy";
 import { playerScore } from "../engine/score";
 import { tribeById } from "../data/tribes";
 import { isMuted, setMuted } from "../game/sound";
+import { isFullscreen, onFullscreenChange, supportsFullscreen, toggleFullscreen } from "../game/fullscreen";
 import TechTreeDialog from "./TechTreeDialog";
 import HelpOverlay from "./HelpOverlay";
 import ScoreDialog from "./ScoreDialog";
@@ -19,6 +20,8 @@ export default function TopBar() {
   const [savesOpen, setSavesOpen] = useState(false);
   // the mute flag lives outside React; this re-renders the toggle after a change
   const [, setMutedTick] = useState(0);
+  const [fullscreen, setFullscreen] = useState(isFullscreen);
+  useEffect(() => onFullscreenChange(() => setFullscreen(isFullscreen())), []);
   const s = game.state;
   if (!s) return null;
   const me = playerById(s, HUMAN_ID);
@@ -80,6 +83,28 @@ export default function TopBar() {
         >
           {isMuted() ? "🔇" : "🔊"}
         </button>
+        {supportsFullscreen() && (
+          <button
+            className="rounded bg-white/10 px-2 py-1.5 hover:bg-white/20 sm:px-3"
+            onClick={() => void toggleFullscreen()}
+            title={fullscreen ? "Leave fullscreen" : "Play fullscreen"}
+            aria-label={fullscreen ? "Leave fullscreen" : "Play fullscreen"}
+          >
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.4"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden
+            >
+              <path d={fullscreen ? "M9 3v6H3M15 3v6h6M9 21v-6H3M15 21v-6h6" : "M3 9V3h6M21 9V3h-6M3 15v6h6M21 15v6h-6"} />
+            </svg>
+          </button>
+        )}
         <button
           className="rounded bg-white/10 px-2 py-1.5 hover:bg-white/20 sm:px-3"
           onClick={() => setHelpOpen(true)}

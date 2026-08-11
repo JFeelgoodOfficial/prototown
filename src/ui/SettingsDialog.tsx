@@ -1,40 +1,21 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { isMuted, setMuted, playSound } from "../game/sound";
+import { isFullscreen, onFullscreenChange, supportsFullscreen, toggleFullscreen } from "../game/fullscreen";
 import HelpOverlay from "./HelpOverlay";
 
 /** Settings that outlive a single game: sound, display, and the rules sheet. */
 export default function SettingsDialog({ onClose }: { onClose: () => void }) {
   const [sound, setSound] = useState(!isMuted());
-  const [fullscreen, setFullscreen] = useState(document.fullscreenElement !== null);
+  const [fullscreen, setFullscreen] = useState(isFullscreen);
   const [helpOpen, setHelpOpen] = useState(false);
 
-  useEffect(() => {
-    const sync = () => setFullscreen(document.fullscreenElement !== null);
-    document.addEventListener("fullscreenchange", sync);
-    return () => document.removeEventListener("fullscreenchange", sync);
-  }, []);
+  useEffect(() => onFullscreenChange(() => setFullscreen(isFullscreen())), []);
 
   const toggleSound = () => {
     const next = !sound;
     setMuted(!next);
     setSound(next);
     if (next) playSound("select");
-  };
-
-  const toggleFullscreen = async () => {
-    try {
-      if (document.fullscreenElement) {
-        await document.exitFullscreen();
-        return;
-      }
-      await document.documentElement.requestFullscreen();
-      // Phones can hold the screen in landscape once the page owns it. Browsers
-      // that refuse just reject, and the rotate prompt keeps doing its job.
-      const orientation = screen.orientation as (ScreenOrientation & { lock?: (o: string) => Promise<void> }) | undefined;
-      await orientation?.lock?.("landscape").catch(() => {});
-    } catch {
-      // fullscreen denied — nothing to recover, the toggle simply stays off
-    }
   };
 
   return (
@@ -57,13 +38,15 @@ export default function SettingsDialog({ onClose }: { onClose: () => void }) {
           onToggle={toggleSound}
           icon={<span className="text-xl">{sound ? "🔊" : "🔇"}</span>}
         />
-        <Toggle
-          label="Fullscreen"
-          hint="Fills the screen, and holds landscape where the browser allows it"
-          on={fullscreen}
-          onToggle={toggleFullscreen}
-          icon={<FullscreenIcon on={fullscreen} />}
-        />
+        {supportsFullscreen() && (
+          <Toggle
+            label="Fullscreen"
+            hint="Optional — play windowed or filling the screen, switch any time"
+            on={fullscreen}
+            onToggle={() => void toggleFullscreen()}
+            icon={<FullscreenIcon on={fullscreen} />}
+          />
+        )}
 
         <button
           className="mt-4 w-full rounded-xl bg-white/10 py-2.5 font-semibold hover:bg-white/20"
