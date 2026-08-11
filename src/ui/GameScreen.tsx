@@ -18,6 +18,7 @@ import { watchedMask } from "../engine/fog";
 import TopBar from "./TopBar";
 import SidePanel from "./SidePanel";
 import RewardPicker from "./RewardPicker";
+import OnlineStatusBar from "./OnlineStatusBar";
 
 export default function GameScreen() {
   const game = useGame();
@@ -410,6 +411,7 @@ export default function GameScreen() {
             Rival tribes are moving…
           </div>
         )}
+        {game.mode === "online" && <OnlineStatusBar />}
       </div>
     </div>
   );

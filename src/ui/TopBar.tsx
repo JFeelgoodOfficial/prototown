@@ -111,18 +111,20 @@ export default function TopBar() {
         >
           ?
         </button>
-        <button
-          className="rounded bg-white/10 px-2 py-1.5 hover:bg-white/20 sm:px-3"
-          onClick={() => setSavesOpen(true)}
-          title="Saved games"
-          aria-label="Saved games"
-        >
-          💾
-        </button>
+        {game.mode === "local" && (
+          <button
+            className="rounded bg-white/10 px-2 py-1.5 hover:bg-white/20 sm:px-3"
+            onClick={() => setSavesOpen(true)}
+            title="Saved games"
+            aria-label="Saved games"
+          >
+            💾
+          </button>
+        )}
         <button
           className="rounded bg-white/10 px-2 py-1.5 hover:bg-white/20 sm:px-3"
           onClick={() => game.backToMenu()}
-          title="Back to menu (game is autosaved)"
+          title={game.mode === "online" ? "Leave — the game stays on the server, reopen it from your link" : "Back to menu (game is autosaved)"}
         >
           Menu
         </button>

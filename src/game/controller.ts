@@ -20,6 +20,7 @@ import {
 } from "./persistence";
 import { DIFFICULTY_PERSONALITY, type Difficulty } from "./difficulty";
 import { playSound } from "./sound";
+import type { OnlineConfig, OnlineSessionHandle } from "../net/types";
 
 export type Screen = "menu" | "game" | "gameover";
 
@@ -57,6 +58,9 @@ export class GameController {
   /** Engine player id this client plays as. Always 0 in local games. */
   localSeat = 0;
   mode: "local" | "online" = "local";
+  /** Live network session when playing online; null in local games. */
+  online: OnlineSessionHandle | null = null;
+  onlineConfig: OnlineConfig | null = null;
   selectedUnitId: number | null = null;
   selectedTile: [number, number] | null = null;
   legal: Action[] = [];
@@ -87,6 +91,7 @@ export class GameController {
   }
 
   startNewGame(opts: NewGameOptions, difficulty: Difficulty): void {
+    this.leaveOnline();
     this.state = newGame(opts);
     this.agents.clear();
     this.difficulty = difficulty;
@@ -101,13 +106,90 @@ export class GameController {
     this.notify();
   }
 
-  /** One agent per AI player, all sharing the current difficulty's personality. */
+  /** Adopt a replayed network game as the live game and start playing it. */
+  startOnlineGame(state: GameState, localSeat: number, config: OnlineConfig, session: OnlineSessionHandle): void {
+    this.online?.detach();
+    this.mode = "online";
+    this.localSeat = localSeat;
+    this.online = session;
+    this.onlineConfig = config;
+    this.state = state;
+    this.difficulty = config.difficulty;
+    this.spawnAgents();
+    this.screen = state.winnerId !== null ? "gameover" : "game";
+    this.selectedUnitId = null;
+    this.selectedTile = null;
+    this.floats = [];
+    this.anims = [];
+    this.refreshLegal();
+    this.notify();
+    this.maybePumpOnline();
+  }
+
+  /** Drop the network session and return to local single-player mode. */
+  leaveOnline(): void {
+    if (this.mode !== "online") return;
+    this.online?.detach();
+    this.online = null;
+    this.onlineConfig = null;
+    this.mode = "local";
+    this.localSeat = 0;
+    this.state = null;
+    this.screen = "menu";
+    if (typeof window !== "undefined" && window.location.hash.startsWith("#g/")) {
+      window.location.hash = "";
+    }
+    this.notify();
+  }
+
+  /** Apply a move another client committed to the shared log. */
+  applyRemoteAction(action: Action): void {
+    if (!this.state || this.mode !== "online") return;
+    this.applyWithEffects(action, this.isActionVisible(action));
+    this.refreshLegal();
+    if (this.state.winnerId !== null) this.screen = "gameover";
+    this.notify();
+  }
+
+  /** Replace the state wholesale after a network resync. */
+  resetOnlineState(state: GameState): void {
+    if (this.mode !== "online") return;
+    this.state = state;
+    this.spawnAgents();
+    this.selectedUnitId = null;
+    this.selectedTile = null;
+    this.floats = [];
+    this.anims = [];
+    this.refreshLegal();
+    this.screen = state.winnerId !== null ? "gameover" : "game";
+    this.notify();
+  }
+
+  /** Start the AI pump if the current online seat is one this client drives. */
+  maybePumpOnline(): void {
+    if (this.mode !== "online" || !this.state || this.state.winnerId !== null) return;
+    const current = this.state.currentPlayerId;
+    if (current !== this.localSeat && this.drivesSeat(current)) void this.runTurnPump();
+  }
+
+  /** Let the network session redraw status banners. */
+  touch(): void {
+    this.notify();
+  }
+
+  /**
+   * One agent per AI player, all sharing the current difficulty's personality.
+   * Online, every non-local seat gets an agent: a remote human's seat is never
+   * pumped unless the server hands it to the AI (abandoned-turn takeover), and
+   * then it must play like one.
+   */
   private spawnAgents(): void {
     if (!this.state) return;
     const personality: AiPersonality = DIFFICULTY_PERSONALITY[this.difficulty];
     this.agents.clear();
     for (const p of this.state.players) {
-      if (!p.isHuman) this.agents.set(p.id, new HeuristicAgent(personality));
+      const needsAgent = this.mode === "online" ? p.id !== this.localSeat : !p.isHuman;
+      if (needsAgent) this.agents.set(p.id, new HeuristicAgent(personality));
     }
   }
 
@@ -117,6 +199,11 @@ export class GameController {
   }
 
   backToMenu(): void {
+    if (this.mode === "online") {
+      // an online game lives on the server; leaving just closes this window on it
+      this.leaveOnline();
+      return;
+    }
     this.screen = "menu";
     this.notify();
   }
@@ -133,6 +220,10 @@ export class GameController {
   }
 
   abandonGame(): void {
+    if (this.mode === "online") {
+      this.leaveOnline();
+      return;
+    }
     clearSave();
     this.state = null;
     this.lastSavedAt = null;
@@ -140,15 +231,18 @@ export class GameController {
     this.notify();
   }
 
-  /** Write the current game to storage, recording when it happened. */
+  /**
+   * Write the current game to storage, recording when it happened. Online
+   * games never touch the local autosave — the server log is the save.
+   */
   private persist(): void {
-    if (!this.state) return;
+    if (!this.state || this.mode === "online") return;
     if (saveGame(this.state, this.difficulty)) this.lastSavedAt = Date.now();
   }
 
   /** Flush a save outside the normal action flow (tab hidden, page unloading). */
   saveNow(): void {
-    if (!this.state || this.state.winnerId !== null) return;
+    if (!this.state || this.state.winnerId !== null || this.mode === "online") return;
     this.persist();
   }
 
@@ -183,6 +277,7 @@ export class GameController {
 
   /** Take a loaded save as the live game and start playing it. */
   private adoptSave(loaded: SavedGame): boolean {
+    this.leaveOnline();
     this.state = loaded.state;
     this.difficulty = loaded.difficulty;
     this.floats = [];
@@ -204,18 +299,19 @@ export class GameController {
   dispatch(action: Action): void {
     if (!this.state || this.aiBusy || this.state.currentPlayerId !== this.localSeat) return;
     this.applyWithEffects(action);
+    this.online?.onLocalAction(action);
     this.selectedTile = null;
     if (action.type !== "MOVE") this.selectedUnitId = null;
     else this.selectedUnitId = action.unitId;
     this.refreshLegal();
     if (this.state.winnerId !== null) {
       this.screen = "gameover";
-      clearSave();
+      if (this.mode === "local") clearSave();
     } else {
       this.persist();
     }
     this.notify();
-    if (this.state.currentPlayerId !== this.localSeat && this.state.winnerId === null) {
+    if (this.state.currentPlayerId !== this.localSeat && this.state.winnerId === null && this.drivesSeat(this.state.currentPlayerId)) {
       void this.runTurnPump();
     }
   }
@@ -343,7 +439,14 @@ export class GameController {
    * client has been told to drive (remote humans move themselves).
    */
   protected drivesSeat(pid: number): boolean {
+    if (this.mode === "online") return this.online?.drivesSeat(pid) ?? false;
     return pid !== this.localSeat;
+  }
+
+  /** Apply an action this client originated for a seat it drives. */
+  private applyDriven(action: Action, perceived: boolean): void {
+    this.applyWithEffects(action, perceived);
+    this.online?.onLocalAction(action);
   }
 
   /** Advance seats this client drives until control returns to a seat it doesn't (or the game ends). */
@@ -364,7 +467,7 @@ export class GameController {
         const pid = this.state.currentPlayerId;
         const agent = this.agents.get(pid);
         if (!agent || !playerById(this.state, pid).alive) {
-          this.applyWithEffects({ type: "END_TURN" });
+          this.applyDriven({ type: "END_TURN" }, false);
           this.notify();
           continue;
         }
@@ -376,13 +479,13 @@ export class GameController {
         ) {
           const action = actionsThisTurn === AI_ACTION_CAP - 1 ? ({ type: "END_TURN" } as Action) : agent.chooseAction(this.state, pid);
           const visible = this.isActionVisible(action);
-          this.applyWithEffects(action, visible);
+          this.applyDriven(action, visible);
           actionsThisTurn++;
           this.notify();
           if (visible) await sleep(AI_STEP_MS);
         }
         if (this.state.currentPlayerId === pid && this.state.winnerId === null) {
-          this.applyWithEffects({ type: "END_TURN" });
+          this.applyDriven({ type: "END_TURN" }, false);
           this.notify();
         }
       }
@@ -392,7 +495,7 @@ export class GameController {
       if (this.state) {
         if (this.state.winnerId !== null) {
           this.screen = "gameover";
-          clearSave();
+          if (this.mode === "local") clearSave();
         } else {
           this.persist();
         }

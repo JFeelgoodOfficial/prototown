@@ -6,6 +6,8 @@ import { dailyOptions, dailyKey, loadDailyResult, DAILY_DIFFICULTY } from "../ga
 import { TRIBES, tribeById } from "../data/tribes";
 import UnitPortrait from "./UnitPortrait";
 import SavesDialog from "./SavesDialog";
+import OnlineMenu from "./OnlineMenu";
+import { onlineEnabled } from "../net/env";
 import type { GameState, WinMode } from "../engine/state";
 
 /** The new-game setup, reached from Start on the title screen. */
@@ -16,6 +18,7 @@ export default function MainMenu({ onBack }: { onBack?: () => void }) {
   const [difficulty, setDifficulty] = useState<Difficulty>("normal");
   const [winMode, setWinMode] = useState<WinMode>("domination");
   const [savesOpen, setSavesOpen] = useState(false);
+  const [onlineOpen, setOnlineOpen] = useState(false);
   // Read storage once per menu mount; the in-memory game takes priority when present.
   const stored = useMemo(() => loadGame(), []);
   const daily = useMemo(() => loadDailyResult(), []);
@@ -24,6 +27,8 @@ export default function MainMenu({ onBack }: { onBack?: () => void }) {
     : stored
       ? describeGame(stored.state, stored.savedAt)
       : null;
+
+  if (onlineOpen) return <OnlineMenu onBack={() => setOnlineOpen(false)} />;
 
   const start = () => {
     const size = opponents === 1 ? 11 : opponents === 2 ? 14 : 16;
@@ -119,6 +124,17 @@ export default function MainMenu({ onBack }: { onBack?: () => void }) {
                 : `Same map for everyone today · ${dailyKey()}`}
             </span>
           </button>
+          {onlineEnabled() && (
+            <button
+              className="w-full rounded-xl border border-sky-400/30 bg-sky-500/15 py-2.5 font-semibold text-sky-200 hover:bg-sky-500/25"
+              onClick={() => setOnlineOpen(true)}
+            >
+              Play online
+              <span className="block text-xs font-normal text-sky-200/60">
+                Challenge a friend — take turns whenever, on any device
+              </span>
+            </button>
+          )}
           {resumeInfo && (
             <button
               className="w-full rounded-xl bg-white/10 py-2.5 font-semibold hover:bg-white/20"
