@@ -6,9 +6,17 @@ import { playSound } from "../game/sound";
 
 /**
  * The painted title screen. The four buttons are part of the artwork, so the
- * interactive controls are transparent hit areas laid over them: the image is
- * pinned to its own aspect ratio and every hotspot is positioned as a
- * percentage of it, so art and controls stay locked together at any size.
+ * interactive controls are transparent hit areas laid over them: every hotspot
+ * is positioned as a percentage of the image, so art and controls stay locked
+ * together at any size.
+ *
+ * The art fills the screen rather than letterboxing. It is scaled past the
+ * viewport and the overflow clipped — anchored to the bottom, so a window
+ * taller than the art trims the far edges (the buttons sit well inside them)
+ * and a wider one takes a slice of sky off the top, never the button bar.
+ * Both crops are capped, and whatever the crop can't cover is filled by a
+ * blurred copy of the same art, so the screen reads full-bleed at any shape
+ * without ever cutting the logo or a button.
  */
 
 /** Measured from the artwork (1376x768): plate centres and the plate's box. */
@@ -21,6 +29,21 @@ const PLATE_HALF_W = 58;
 const HIT_BOTTOM = 768;
 
 const pct = (v: number, total: number) => `${(v / total) * 100}%`;
+
+const RATIO = ART_W / ART_H;
+/**
+ * How wide to draw the art. The first term fills the width but stops once the
+ * vertical crop would reach the logo — only the 18px of sky above it is spare,
+ * so that headroom is all it may spend. The second fills the height but stops
+ * before the outer buttons would run off the sides. Whichever is larger wins,
+ * so the art covers as much of the screen as it can without losing anything.
+ */
+const SKY_HEADROOM = 16 / ART_H;
+const SIDE_LIMIT = 2.3;
+const ART_WIDTH_CSS = `max(
+  min(100vw, calc(100dvh * ${(RATIO / (1 - SKY_HEADROOM)).toFixed(4)})),
+  min(calc(100dvh * ${RATIO.toFixed(4)}), calc(100vw * ${SIDE_LIMIT}))
+)`;
 
 type Slot = { id: string; cx: number; label: string; hint: string };
 
@@ -51,15 +74,22 @@ export default function TitleScreen() {
   };
 
   return (
-    <div className="flex h-full w-full items-center justify-center overflow-hidden bg-[#081019]">
+    <div className="relative h-full w-full overflow-hidden bg-[#081019]">
+      <img
+        src="/title.webp"
+        alt=""
+        aria-hidden
+        className="absolute inset-0 h-full w-full scale-110 object-cover blur-2xl brightness-[0.45]"
+        draggable={false}
+      />
       <div
-        className="relative select-none"
-        style={{ width: `min(100%, calc(100dvh * ${ART_W / ART_H}))`, aspectRatio: `${ART_W} / ${ART_H}` }}
+        className="absolute bottom-0 left-1/2 -translate-x-1/2 select-none"
+        style={{ width: ART_WIDTH_CSS, aspectRatio: `${ART_W} / ${ART_H}` }}
       >
         <img
           src="/title.webp"
           alt="Prototown — a walled town of the Ashfen tribe, with mines, farms, forests and a harbour"
-          className="h-full w-full object-contain"
+          className="h-full w-full object-fill"
           draggable={false}
           fetchPriority="high"
         />
