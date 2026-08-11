@@ -773,6 +773,40 @@ function drawResource(ctx: Ctx, resource: ResourceType): void {
       ctx.fillStyle = "rgba(226,246,255,0.7)";
       ctx.fill();
     });
+  } else if (resource === "whale") {
+    // a broad dark back breaking the surface, tail up, blowing a spout
+    ctx.translate(-13, 2);
+    for (let i = 0; i < 3; i++) {
+      ctx.beginPath();
+      ctx.ellipse(i * 2 - 1, i * 1.5 - 1, 15 - i * 3.4, 6 - i * 1.3, 0, 0, Math.PI * 2);
+      ctx.strokeStyle = `rgba(226,246,255,${0.5 - i * 0.13})`;
+      ctx.lineWidth = 1.2;
+      ctx.stroke();
+    }
+    // tail fluke, rising behind the back
+    plate(ctx, [[-11, -7], [-15.4, -14.6], [-10.4, -12.6], [-6.4, -15.4], [-7.4, -8.4]], "#33566e", {
+      hi: "#7fa6bd", lo: "#152c3c", rimA: 0.35,
+    });
+    orb(ctx, 1.6, -8.4, 9.4, 4.4, "#3d6076", { hi: "#9dc0d3", lo: "#12283a", rot: -0.12 });
+    // pale grooved underside catching the light along the waterline
+    plate(ctx, [[-6.6, -5.6], [8.4, -6.6], [9.4, -4.6], [-6.2, -3.6]], "#7f9fb0", {
+      hi: "#d6e9f2", lo: "#3c5a6c", rimA: 0.25,
+    });
+    spec(ctx, -1, -10.6, 4.6, 1.5, -0.14, 0.5);
+    ctx.beginPath();
+    ctx.arc(8.2, -8.6, 0.7, 0, Math.PI * 2);
+    ctx.fillStyle = "#0d2130";
+    ctx.fill();
+    // spout
+    stroke(ctx, [[7.4, -12.2], [8.4, -17.4]], "rgba(233,249,255,0.75)", 1.4);
+    ([[7.4, -18.8, 1.9], [5.2, -17.4, 1.3], [9.8, -17.6, 1.5]] as Array<[number, number, number]>).forEach(
+      ([dx, dy, r]) => {
+        ctx.beginPath();
+        ctx.ellipse(dx, dy, r, r * 0.82, 0, 0, Math.PI * 2);
+        ctx.fillStyle = "rgba(233,249,255,0.62)";
+        ctx.fill();
+      },
+    );
   }
   ctx.restore();
 }

@@ -5,6 +5,7 @@ import { resolveCombat } from "../engine/combat";
 import { UNITS } from "../data/units";
 import { TECH_BY_ID } from "../data/techs";
 import { TERRAIN } from "../data/terrain";
+import { HARVEST_DEFS } from "../data/constants";
 import { cityUnitCount, cityCapacity } from "../engine/economy";
 
 export interface AiPersonality {
@@ -48,7 +49,9 @@ export function evaluatePosition(state: GameState, playerId: number): number {
 
   for (const c of state.cities) {
     const mine = c.ownerId === playerId;
-    const worth = 120 + c.level * 40 + (c.isCapital ? 60 : 0);
+    // walls and parks are counted here as well as scored as actions, or the
+    // lookahead would only ever see the stars leaving and veto buying them
+    const worth = 120 + c.level * 40 + (c.isCapital ? 60 : 0) + (c.walls ? 25 : 0) + c.parks * 45;
     value += mine ? worth : -worth * 0.7;
   }
 
@@ -177,8 +180,12 @@ export function scoreAction(
       return unit.hp < unit.maxHp * 0.6 ? missing * 2.5 : 2;
     }
 
-    case "HARVEST":
-      return 55 * personality.economy;
+    case "HARVEST": {
+      const def = HARVEST_DEFS[tileAt(state, action.x, action.y).resource as keyof typeof HARVEST_DEFS];
+      // a whale pays stars rather than growth, so it is worth taking regardless
+      const windfall = def ? def.stars * 4 : 0;
+      return (55 + windfall) * personality.economy;
+    }
 
     case "BUILD":
       return 50 * personality.economy;
@@ -193,7 +200,7 @@ export function scoreAction(
       // economy that pays for the army in the first place.
       const wantArmy = Math.round((cities * 2 + 1) * (1 + (personality.aggression - 1) * 0.5));
       if (army >= wantArmy) return -5;
-      if (cityUnitCount(state, city.id) >= cityCapacity(city)) return -Infinity;
+      if (cityUnitCount(state, city.id) >= cityCapacity(state, city)) return -Infinity;
       const def = UNITS[action.unitType];
       return (20 + def.cost * 3 + (army < cities ? 15 : 0)) * personality.aggression;
     }
@@ -204,6 +211,12 @@ export function scoreAction(
       let score = 30 - tech.tier * 6;
       if (["organization", "hunting", "fishing", "farming", "forestry", "mining"].includes(tech.id)) score += 12;
       if (["archery", "shields", "smithery", "chivalry"].includes(tech.id)) score += 8 * personality.aggression;
+      // techs that pay for themselves: income, cheaper research, star windfalls
+      if (["trade", "philosophy", "whaling"].includes(tech.id)) score += 12 * personality.economy;
+      // roads is worth more the more ground there is to cover
+      if (tech.id === "roads") score += 6 + citiesOf(state, playerId).length * 2;
+      if (["strategy", "construction"].includes(tech.id)) score += 8 * personality.aggression;
+      if (tech.id === "spiritualism") score += state.winMode === "perfection" ? 20 : 4;
       // don't spend everything on research when broke
       if (player.stars < 8) score -= 15;
       return score * personality.research;
@@ -221,6 +234,12 @@ export function scoreAction(
         park: 6,
       };
       return prefs[action.reward] ?? 5;
+    }
+
+    case "BUILD_IMPROVEMENT": {
+      if (action.improvement === "walls") return 26 * personality.aggression;
+      // a park is 250 points of nothing else; only Perfection games care
+      return state.winMode === "perfection" ? 60 : 8;
     }
 
     case "UPGRADE_BOAT":

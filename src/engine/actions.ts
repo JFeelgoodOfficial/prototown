@@ -1,4 +1,5 @@
 import type { UnitType } from "../data/units";
+import type { CityImprovement } from "../data/constants";
 import type { BuildingType } from "./state";
 
 export type Action =
@@ -12,6 +13,7 @@ export type Action =
   | { type: "HARVEST"; x: number; y: number }
   | { type: "BUILD"; x: number; y: number; building: BuildingType }
   | { type: "TRAIN"; cityId: number; unitType: UnitType }
+  | { type: "BUILD_IMPROVEMENT"; cityId: number; improvement: CityImprovement }
   | { type: "RESEARCH"; techId: string }
   | { type: "CHOOSE_REWARD"; cityId: number; reward: string }
   | { type: "END_TURN" };

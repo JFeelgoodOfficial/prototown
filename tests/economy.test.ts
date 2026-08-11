@@ -7,13 +7,13 @@ describe("economy", () => {
   it("city income: base + level-1 + capital + workshop", () => {
     const s = makeTestState();
     const c = s.cities[0];
-    expect(cityIncome(c)).toBe(2); // level 1 capital
+    expect(cityIncome(s, c)).toBe(2); // level 1 capital
     c.level = 3;
-    expect(cityIncome(c)).toBe(4);
+    expect(cityIncome(s, c)).toBe(4);
     c.workshop = true;
-    expect(cityIncome(c)).toBe(5);
+    expect(cityIncome(s, c)).toBe(5);
     c.isCapital = false;
-    expect(cityIncome(c)).toBe(4);
+    expect(cityIncome(s, c)).toBe(4);
   });
 
   it("level 1 -> 2 needs 2 population, excess carries over", () => {

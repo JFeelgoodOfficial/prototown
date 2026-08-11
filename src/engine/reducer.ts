@@ -29,6 +29,7 @@ import { tribeById } from "../data/tribes";
 import {
   HARVEST_DEFS,
   BUILDING_DEFS,
+  CITY_IMPROVEMENTS,
   RECOVER_HEAL,
   RECOVER_HEAL_OWN_TERRITORY,
   REWARD_STARS_AMOUNT,
@@ -187,8 +188,10 @@ export function applyAction(prev: GameState, action: Action): GameState {
       if (!tile.resource || !(tile.resource in HARVEST_DEFS)) throw new Error("no harvestable resource");
       const def = HARVEST_DEFS[tile.resource as keyof typeof HARVEST_DEFS];
       player.stars -= def.cost;
+      player.stars += def.stars;
       tile.resource = null;
-      addPopulation(cityById(state, tile.cityId!)!, def.pop);
+      // a whale is a payday, not a settlement — it feeds nobody
+      if (def.pop > 0) addPopulation(cityById(state, tile.cityId!)!, def.pop);
       break;
     }
 
@@ -226,8 +229,18 @@ export function applyAction(prev: GameState, action: Action): GameState {
       break;
     }
 
+    case "BUILD_IMPROVEMENT": {
+      const city = cityById(state, action.cityId)!;
+      player.stars -= CITY_IMPROVEMENTS[action.improvement].cost;
+      if (action.improvement === "walls") city.walls = true;
+      else city.parks += 1;
+      break;
+    }
+
     case "RESEARCH": {
-      player.stars -= techCost(action.techId, citiesOf(state, player.id).length);
+      // the discount is read before the push, so Philosophy itself pays full price
+      const discounted = hasTech(player, "philosophy");
+      player.stars -= techCost(action.techId, citiesOf(state, player.id).length, discounted);
       player.techs.push(action.techId);
       break;
     }

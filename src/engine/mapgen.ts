@@ -2,7 +2,7 @@ import type { GameState, PlayerState, Tile, TerrainType, City, Unit } from "./st
 import { idx, inBounds, neighbors, dist } from "./state";
 import { mulberry32, nextInt } from "./rng";
 import { tribeById } from "../data/tribes";
-import { INITIAL_STARS, MAX_TURNS_PERFECTION, RUIN_TILES_PER } from "../data/constants";
+import { INITIAL_STARS, MAX_TURNS_PERFECTION, RUIN_TILES_PER, WHALE_SHARE } from "../data/constants";
 import { computeVisibility } from "./fog";
 import type { WinMode } from "./state";
 
@@ -191,7 +191,14 @@ export function newGame(opts: NewGameOptions): GameState {
     } else if (t.terrain === "mountain") {
       if (nextInt(state, 100) < chance * 55) t.resource = "metal";
     } else if (t.terrain === "water") {
-      if (nextInt(state, 100) < chance * 45) t.resource = "fish";
+      // One draw, as before, so every existing seed keeps the same map shape —
+      // only what some shallow water holds changes. Whales are the rarest end
+      // of that roll and never appear away from a settlement, because water
+      // outside anyone's future borders can never be harvested.
+      const roll = nextInt(state, 100);
+      if (roll < chance * 45) {
+        t.resource = nearSettlement && roll < chance * 45 * WHALE_SHARE ? "whale" : "fish";
+      }
     }
   }
 

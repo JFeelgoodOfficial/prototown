@@ -14,7 +14,14 @@ import type { Action } from "./actions";
 import { reachableTiles } from "./movement";
 import { unitRange } from "./combat";
 import { watchedMask } from "./fog";
-import { HARVEST_DEFS, BUILDING_DEFS, REWARD_STARS_AMOUNT } from "../data/constants";
+import {
+  HARVEST_DEFS,
+  BUILDING_DEFS,
+  CITY_IMPROVEMENTS,
+  MAX_PARKS_PER_CITY,
+  REWARD_STARS_AMOUNT,
+  type CityImprovement,
+} from "../data/constants";
 import { UNITS, NAVAL, type UnitType } from "../data/units";
 import { TECHS, techCost } from "../data/techs";
 import { cityUnitCount, cityCapacity, playerHasPendingReward } from "./economy";
@@ -95,7 +102,7 @@ export function computeLegalActions(state: GameState, playerId: number): Action[
   for (const city of myCities) {
     const occupied = unitAt(state, city.x, city.y) !== undefined;
     if (occupied) continue;
-    if (cityUnitCount(state, city.id) >= cityCapacity(city)) continue;
+    if (cityUnitCount(state, city.id) >= cityCapacity(state, city)) continue;
     for (const [unitType, def] of Object.entries(UNITS)) {
       if (!def.trainable) continue;
       if (def.cost > player.stars) continue;
@@ -104,11 +111,27 @@ export function computeLegalActions(state: GameState, playerId: number): Action[
     }
   }
 
+  // Separate from the training loop above: buying walls is masonry, not
+  // recruitment, so a unit standing on the city tile must not block it.
+  for (const city of myCities) {
+    for (const [name, def] of Object.entries(CITY_IMPROVEMENTS)) {
+      if (!hasTech(player, def.tech) || player.stars < def.cost) continue;
+      if (name === "walls" && city.walls) continue;
+      if (name === "park" && city.parks >= MAX_PARKS_PER_CITY) continue;
+      actions.push({
+        type: "BUILD_IMPROVEMENT",
+        cityId: city.id,
+        improvement: name as CityImprovement,
+      });
+    }
+  }
+
   const numCities = myCities.length;
+  const discounted = hasTech(player, "philosophy");
   for (const tech of TECHS) {
     if (player.techs.includes(tech.id)) continue;
     if (tech.requires && !player.techs.includes(tech.requires)) continue;
-    if (techCost(tech.id, numCities) > player.stars) continue;
+    if (techCost(tech.id, numCities, discounted) > player.stars) continue;
     actions.push({ type: "RESEARCH", techId: tech.id });
   }
 

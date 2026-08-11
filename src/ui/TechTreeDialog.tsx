@@ -29,7 +29,7 @@ export default function TechTreeDialog({ onClose }: { onClose: () => void }) {
               {TECHS.filter((t) => branchOf(t.id) === root).map((tech) => {
                 const known = me.techs.includes(tech.id);
                 const prereqOk = !tech.requires || me.techs.includes(tech.requires);
-                const cost = techCost(tech.id, numCities);
+                const cost = techCost(tech.id, numCities, me.techs.includes("philosophy"));
                 const action = game.legal.find((a) => a.type === "RESEARCH" && a.techId === tech.id);
                 return (
                   <button
