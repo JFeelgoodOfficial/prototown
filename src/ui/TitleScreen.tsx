@@ -10,48 +10,49 @@ import { playSound } from "../game/sound";
  * is positioned as a percentage of the image, so art and controls stay locked
  * together at any size.
  *
- * The art fills the screen rather than letterboxing. It is scaled past the
- * viewport and the overflow clipped — anchored to the bottom, so a window
- * taller than the art trims the far edges (the buttons sit well inside them)
- * and a wider one takes a slice of sky off the top, never the button bar.
- * Both crops are capped, and whatever the crop can't cover is filled by a
- * blurred copy of the same art, so the screen reads full-bleed at any shape
- * without ever cutting the logo or a button.
+ * The art fills the screen rather than letterboxing. Its canvas carries a
+ * wide margin of painted night sky around the scene, so it can be scaled to
+ * cover any screen from a squarish monitor to an ultrawide and only that
+ * margin gets clipped — the logo and the buttons sit far inside it. The crop
+ * is anchored to the bottom, which keeps the button bar on the screen edge.
  */
 
-/** Measured from the artwork (1376x768): plate centres and the plate's box. */
-const ART_W = 1376;
-const ART_H = 768;
-const PLATE_TOP = 622;
-const PLATE_BOTTOM = 720;
+/** Full canvas, including the painted sky margin around the scene. */
+const ART_W = 2040;
+const ART_H = 816;
+/** Where the 1376x768 scene sits inside it — every measurement below is in scene coords. */
+const SCENE_X = 332;
+const SCENE_Y = 48;
+
+/** Measured from the scene: the plate box, and the centre of each plate. */
+const PLATE_TOP = SCENE_Y + 622;
+const PLATE_BOTTOM = SCENE_Y + 720;
 const PLATE_HALF_W = 58;
 /** The hit area also covers the word under the plate — a bigger target for thumbs. */
-const HIT_BOTTOM = 768;
+const HIT_BOTTOM = SCENE_Y + 768;
 
 const pct = (v: number, total: number) => `${(v / total) * 100}%`;
 
 const RATIO = ART_W / ART_H;
 /**
- * How wide to draw the art. The first term fills the width but stops once the
- * vertical crop would reach the logo — only the 18px of sky above it is spare,
- * so that headroom is all it may spend. The second fills the height but stops
- * before the outer buttons would run off the sides. Whichever is larger wins,
- * so the art covers as much of the screen as it can without losing anything.
+ * Cover the viewport: whichever fit is larger wins, and the surplus is clipped.
+ * A screen wider than the canvas would eventually crop into the logo, so that
+ * term stops once it has spent the sky above it — past ~2.7:1 the art fills the
+ * height instead and the blurred backdrop takes the last slivers.
  */
-const SKY_HEADROOM = 16 / ART_H;
-const SIDE_LIMIT = 2.3;
+const SKY_HEADROOM = (SCENE_Y + 16) / ART_H;
 const ART_WIDTH_CSS = `max(
   min(100vw, calc(100dvh * ${(RATIO / (1 - SKY_HEADROOM)).toFixed(4)})),
-  min(calc(100dvh * ${RATIO.toFixed(4)}), calc(100vw * ${SIDE_LIMIT}))
+  calc(100dvh * ${RATIO.toFixed(4)})
 )`;
 
 type Slot = { id: string; cx: number; label: string; hint: string };
 
 const SLOTS: Slot[] = [
-  { id: "start", cx: 473, label: "Start", hint: "Set up a new game" },
-  { id: "load", cx: 618, label: "Load", hint: "Saved games" },
-  { id: "settings", cx: 762, label: "Settings", hint: "Sound and display" },
-  { id: "quit", cx: 907, label: "Quit", hint: "Leave the game" },
+  { id: "start", cx: SCENE_X + 473, label: "Start", hint: "Set up a new game" },
+  { id: "load", cx: SCENE_X + 618, label: "Load", hint: "Saved games" },
+  { id: "settings", cx: SCENE_X + 762, label: "Settings", hint: "Sound and display" },
+  { id: "quit", cx: SCENE_X + 907, label: "Quit", hint: "Leave the game" },
 ];
 
 type View = "title" | "new" | "quit";
