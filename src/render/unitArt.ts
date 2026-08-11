@@ -6,9 +6,9 @@
 import { TRIBES } from "../data/tribes";
 import type { UnitType } from "../data/units";
 
-type Ctx = CanvasRenderingContext2D;
-type Pt = [number, number];
-type Stops = Array<[number, string]>;
+export type Ctx = CanvasRenderingContext2D;
+export type Pt = [number, number];
+export type Stops = Array<[number, string]>;
 
 /** Unit types the art module can draw: every trainable unit plus the embarked forms. */
 export type ArtUnitType = UnitType | "raft" | "ship";
@@ -58,21 +58,21 @@ export interface TribeKit extends KitDef {
   armorDark: string;
 }
 
-interface LimbOpts {
+export interface LimbOpts {
   hi?: string;
   lo?: string;
   rim?: boolean;
   line?: number;
 }
 
-interface PlateOpts extends LimbOpts {
+export interface PlateOpts extends LimbOpts {
   rimA?: number;
   horiz?: boolean;
   spec?: boolean;
   specA?: number;
 }
 
-interface OrbOpts extends LimbOpts {
+export interface OrbOpts extends LimbOpts {
   rot?: number;
 }
 
@@ -1129,3 +1129,8 @@ function star(ctx: Ctx, cx: number, cy: number, r: number, ri: number): void {
   }
   ctx.closePath();
 }
+
+/* The shading kit the figures are built from. terrainArt.ts draws the land,
+   its props and its buildings with the same primitives, so ground and people
+   are lit by one key light and share one material language. */
+export { mix, lt, dk, alpha, MAT, G, RG, limb, plate, orb, ao, spec, stroke, cloth, wood };

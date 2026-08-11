@@ -978,5 +978,9 @@
     ctx.closePath();
   }
 
-  window.PolyforgeArt = { TRIBES, UNITS, KITS, kitFor, drawCharacter, TOPS, FIT };
+  /* The shading kit the figures are built from, shared with mapscene.js so the
+     land, the buildings and the people are all lit by the same key. */
+  const H = { rgb, mix, lt, dk, alpha, L, MAT, G, RG, limb, plate, orb, ao, groundShadow, spec, stroke, cloth, wood };
+
+  window.PolyforgeArt = { TRIBES, UNITS, KITS, kitFor, drawCharacter, TOPS, FIT, H };
 })();

@@ -1,8 +1,26 @@
 import type { GameState, Tile, Unit } from "../engine/state";
-import { idx, cityById } from "../engine/state";
+import { idx, cityById, inBounds } from "../engine/state";
 import { tribeById } from "../data/tribes";
-import { TILE_W, TILE_H, gridToWorld, drawOrder } from "./iso";
+import { TILE_W, TILE_H, gridToWorld, worldToGrid, drawOrder } from "./iso";
 import { drawCharacter } from "./unitArt";
+import {
+  diamondPath,
+  drawCloud,
+  drawProp,
+  drawTile,
+  isWaterTerrain,
+  liftFor,
+  propKey,
+  variantAt,
+  tileBox,
+  EDGE_ORDER,
+  ALL_LIFTS,
+  FOG_BOX,
+  FOG_LIFT,
+  PROP_BOX,
+  type PropKind,
+} from "./terrainArt";
+import { blit, sprite } from "./spriteCache";
 import type { Camera } from "./camera";
 
 export interface FloatingText {
@@ -34,14 +52,6 @@ export interface ViewOptions {
 
 /** Fits the 100-unit-tall authored figures onto a 72x36 iso tile. */
 const UNIT_ART_SCALE = 0.62;
-
-const TERRAIN_COLORS: Record<string, [string, string]> = {
-  field: ["#8fce5e", "#6da844"],
-  forest: ["#7dbb54", "#5c9a3c"],
-  mountain: ["#b8b2a8", "#8f8a80"],
-  water: ["#58b7e3", "#3f9ccb"],
-  ocean: ["#2f7db3", "#256795"],
-};
 
 /** Draw order only depends on map size, but the loop runs every frame. */
 const drawOrderCache = new Map<number, Array<[number, number]>>();
@@ -84,21 +94,30 @@ export function render(ctx: CanvasRenderingContext2D, state: GameState, view: Vi
   const offscreen = (wx: number, wy: number): boolean =>
     wx < cullMinX || wx > cullMaxX || wy < cullMinY || wy > cullMaxY;
 
+  /** Where a tile's top face is drawn: its own height, or the flat fog height. */
+  const topOf = (x: number, y: number): number => {
+    const i = idx(state, x, y);
+    const seen = view.revealAll || view.explored[i] === 1;
+    const wy = gridToWorld(x, y)[1];
+    return wy - (seen ? liftFor(state.tiles[i].terrain, variantAt(x, y)) : FOG_LIFT);
+  };
+
   // Pass 1: tiles
   for (const [x, y] of order) {
     const i = idx(state, x, y);
     const explored = view.revealAll || view.explored[i] === 1;
     const tile = state.tiles[i];
-    const [wx, wy] = gridToWorld(x, y);
-    if (offscreen(wx, wy)) continue;
+    const [wx, wy0] = gridToWorld(x, y);
+    if (offscreen(wx, wy0)) continue;
+    const wy = topOf(x, y);
     if (!explored) {
-      drawCloud(ctx, wx, wy);
+      blit(ctx, sprite("fog", FOG_BOX, (c) => drawCloud(c, 0, 0)), wx, wy);
       continue;
     }
-    drawTile(ctx, state, tile, wx, wy);
+    drawTileAt(ctx, state, tile, x, y, wx, wy);
     if (reachSet.has(y * state.size + x)) {
       diamondPath(ctx, wx, wy);
-      ctx.fillStyle = "rgba(255,255,255,0.4)";
+      ctx.fillStyle = "rgba(255,255,255,0.28)";
       ctx.fill();
       ctx.strokeStyle = "rgba(255,255,255,0.9)";
       ctx.lineWidth = 1.5;
@@ -122,8 +141,9 @@ export function render(ctx: CanvasRenderingContext2D, state: GameState, view: Vi
       unit.ownerId === view.viewerId ||
       (view.explored[i] === 1 && view.watched[i] === 1);
     if (!visible) continue;
-    const [wx, wy] = gridToWorld(x, y);
-    if (offscreen(wx, wy)) continue;
+    const [wx, wy0] = gridToWorld(x, y);
+    if (offscreen(wx, wy0)) continue;
+    const wy = topOf(x, y);
     const off = view.unitOffsets?.get(unit.id);
     drawUnit(
       ctx,
@@ -140,14 +160,15 @@ export function render(ctx: CanvasRenderingContext2D, state: GameState, view: Vi
   for (const city of state.cities) {
     const i = idx(state, city.x, city.y);
     if (!view.revealAll && view.explored[i] !== 1) continue;
-    const [wx, wy] = gridToWorld(city.x, city.y);
-    if (offscreen(wx, wy)) continue;
-    drawNameplate(ctx, state, city, wx, wy);
+    const [wx, wy0] = gridToWorld(city.x, city.y);
+    if (offscreen(wx, wy0)) continue;
+    drawNameplate(ctx, state, city, wx, topOf(city.x, city.y));
   }
 
   // Pass 4: floating combat text
   for (const ft of view.floatingTexts) {
-    const [wx, wy] = gridToWorld(ft.x, ft.y);
+    const wx = gridToWorld(ft.x, ft.y)[0];
+    const wy = topOf(ft.x, ft.y);
     ctx.font = "bold 16px sans-serif";
     ctx.textAlign = "center";
     ctx.fillStyle = ft.color;
@@ -159,216 +180,141 @@ export function render(ctx: CanvasRenderingContext2D, state: GameState, view: Vi
   ctx.restore();
 }
 
-function diamondPath(ctx: CanvasRenderingContext2D, wx: number, wy: number): void {
-  ctx.beginPath();
-  ctx.moveTo(wx, wy - TILE_H / 2);
-  ctx.lineTo(wx + TILE_W / 2, wy);
-  ctx.lineTo(wx, wy + TILE_H / 2);
-  ctx.lineTo(wx - TILE_W / 2, wy);
-  ctx.closePath();
+/** Height of a tile's top face. Fog hides the relief under it, so unexplored
+    tiles all sit at one height and give nothing away. */
+export function tileLift(state: GameState, x: number, y: number, explored?: number[]): number {
+  if (!inBounds(state, x, y)) return 0;
+  const i = idx(state, x, y);
+  if (explored && explored[i] !== 1) return FOG_LIFT;
+  return liftFor(state.tiles[i].terrain, variantAt(x, y));
 }
 
-function drawCloud(ctx: CanvasRenderingContext2D, wx: number, wy: number): void {
-  diamondPath(ctx, wx, wy);
-  ctx.fillStyle = "#1a2436";
-  ctx.fill();
-  ctx.strokeStyle = "#141c2b";
-  ctx.lineWidth = 1;
-  ctx.stroke();
-  ctx.beginPath();
-  ctx.ellipse(wx - 8, wy, 12, 6, 0, 0, Math.PI * 2);
-  ctx.ellipse(wx + 6, wy - 3, 10, 5, 0, 0, Math.PI * 2);
-  ctx.fillStyle = "#243149";
-  ctx.fill();
+/**
+ * World point -> the tile drawn under it.
+ *
+ * Tile tops stand at their own height, so the flat inverse would pick whatever
+ * tile sits under the cursor on the *ground* plane rather than the one the
+ * player can see there. Probe every height a top can be drawn at, keep the
+ * tiles whose drawn diamond really covers the point, and take the one the
+ * painter drew last — that is the one on top.
+ */
+export function pickTile(
+  state: GameState,
+  wx: number,
+  wy: number,
+  explored?: number[],
+): [number, number] {
+  let best: [number, number] | null = null;
+  let bestOrder = -Infinity;
+  let seen = 0;
+  const tried = new Set<number>();
+  for (const probe of ALL_LIFTS) {
+    const [gx, gy] = worldToGrid(wx, wy + probe);
+    if (!inBounds(state, gx, gy)) continue;
+    const key = gy * state.size + gx;
+    if (tried.has(key)) continue;
+    tried.add(key);
+    seen++;
+    const [cx, cy] = gridToWorld(gx, gy);
+    const dy = wy - (cy - tileLift(state, gx, gy, explored));
+    if (Math.abs(wx - cx) / (TILE_W / 2) + Math.abs(dy) / (TILE_H / 2) > 1) continue;
+    const order = gx + gy + gx / (state.size + 1);
+    if (order > bestOrder) {
+      bestOrder = order;
+      best = [gx, gy];
+    }
+  }
+  // Off the board, or over a cliff face rather than any top: the flat inverse
+  // is the honest answer, and the caller bounds-checks it anyway.
+  return best ?? (seen === 0 ? worldToGrid(wx, wy) : worldToGrid(wx, wy + FOG_LIFT));
 }
 
-function drawTile(ctx: CanvasRenderingContext2D, state: GameState, tile: Tile, wx: number, wy: number): void {
-  const [top] = TERRAIN_COLORS[tile.terrain];
-  diamondPath(ctx, wx, wy);
-  ctx.fillStyle = top;
-  ctx.fill();
+/** Bit per neighbouring edge that is water — drives the beaches and the foam. */
+function waterMaskAt(state: GameState, x: number, y: number): number {
+  let mask = 0;
+  EDGE_ORDER.forEach(([dx, dy], i) => {
+    const nx = x + dx;
+    const ny = y + dy;
+    if (!inBounds(state, nx, ny) || isWaterTerrain(state.tiles[idx(state, nx, ny)].terrain)) mask |= 1 << i;
+  });
+  return mask;
+}
+
+function tileSpriteFor(state: GameState, tile: Tile, x: number, y: number) {
+  const variant = variantAt(x, y);
+  const mask = waterMaskAt(state, x, y);
+  return sprite(`tile|${tile.terrain}|${variant}|${mask}`, tileBox(tile.terrain, variant), (c) =>
+    drawTile(c, tile.terrain, variant, mask),
+  );
+}
+
+function propSpriteFor(p: PropKind) {
+  return sprite(`prop|${propKey(p)}`, PROP_BOX, (c) => drawProp(c, p));
+}
+
+/** Land, then everything standing on it. `wy` is the tile's lifted centre. */
+function drawTileAt(
+  ctx: CanvasRenderingContext2D,
+  state: GameState,
+  tile: Tile,
+  x: number,
+  y: number,
+  wx: number,
+  wy: number,
+): void {
+  blit(ctx, tileSpriteFor(state, tile, x, y), wx, wy);
 
   // territory tint + border
-  if (tile.cityId !== null) {
-    const city = cityById(state, tile.cityId);
-    if (city && city.ownerId >= 0) {
-      const tribe = tribeById(state.players[city.ownerId].tribeId);
-      diamondPath(ctx, wx, wy);
-      ctx.fillStyle = tribe.color + "2e";
-      ctx.fill();
-      diamondPath(ctx, wx, wy);
-      ctx.strokeStyle = tribe.color + "88";
-      ctx.lineWidth = 1.5;
-      ctx.stroke();
-    }
+  const city = tile.cityId !== null ? cityById(state, tile.cityId) : undefined;
+  if (city && city.ownerId >= 0) {
+    const tribe = tribeById(state.players[city.ownerId].tribeId);
+    diamondPath(ctx, wx, wy);
+    ctx.fillStyle = tribe.color + "2e";
+    ctx.fill();
+    diamondPath(ctx, wx, wy);
+    ctx.strokeStyle = tribe.color + "88";
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
   } else {
     diamondPath(ctx, wx, wy);
-    ctx.strokeStyle = "rgba(0,0,0,0.12)";
+    ctx.strokeStyle = "rgba(0,0,0,0.14)";
     ctx.lineWidth = 1;
     ctx.stroke();
   }
 
-  if (tile.terrain === "mountain") drawMountain(ctx, wx, wy);
-  if (tile.terrain === "forest") drawTrees(ctx, wx, wy);
-  if (tile.resource) drawResource(ctx, tile.resource, wx, wy);
-  if (tile.building) drawBuilding(ctx, tile.building, wx, wy);
-  if (tile.village) drawVillage(ctx, wx, wy);
-  if (tile.ruin) drawRuin(ctx, wx, wy);
+  const variant = variantAt(x, y);
+  const tribeId = state.players[0] ? tribeById(state.players[0].tribeId).id : "ashfen";
+  const ownerTribe = city && city.ownerId >= 0 ? tribeById(state.players[city.ownerId].tribeId).id : tribeId;
+  // A mine replaces the peak it is cut into, a lumber hut the trees it felled.
+  if (tile.terrain === "mountain" && tile.building !== "mine") {
+    blit(ctx, propSpriteFor({ kind: "mountain", variant }), wx, wy);
+  }
+  if (tile.terrain === "forest" && tile.building !== "lumber_hut") {
+    blit(ctx, propSpriteFor({ kind: "trees", variant, tribeId: ownerTribe }), wx, wy);
+  }
+  if (tile.resource) blit(ctx, propSpriteFor({ kind: "resource", resource: tile.resource }), wx, wy);
+  if (tile.building) {
+    blit(ctx, propSpriteFor({ kind: "building", building: tile.building, tribeId: ownerTribe }), wx, wy);
+  }
+  if (tile.village) blit(ctx, propSpriteFor({ kind: "village" }), wx, wy);
+  if (tile.ruin) blit(ctx, propSpriteFor({ kind: "ruin" }), wx, wy);
   if (tile.cityHere !== null) {
-    const city = cityById(state, tile.cityHere);
-    if (city) drawCity(ctx, state, city, wx, wy);
+    const here = cityById(state, tile.cityHere);
+    if (here) {
+      blit(
+        ctx,
+        propSpriteFor({
+          kind: "city",
+          tribeId: tribeById(state.players[here.ownerId].tribeId).id,
+          level: here.level,
+          walls: here.walls,
+          isCapital: here.isCapital,
+        }),
+        wx,
+        wy,
+      );
+    }
   }
-}
-
-function drawMountain(ctx: CanvasRenderingContext2D, wx: number, wy: number): void {
-  ctx.beginPath();
-  ctx.moveTo(wx - 18, wy + 6);
-  ctx.lineTo(wx - 4, wy - 18);
-  ctx.lineTo(wx + 8, wy + 6);
-  ctx.closePath();
-  ctx.fillStyle = "#9a948a";
-  ctx.fill();
-  ctx.beginPath();
-  ctx.moveTo(wx - 1, wy + 8);
-  ctx.lineTo(wx + 10, wy - 10);
-  ctx.lineTo(wx + 19, wy + 8);
-  ctx.closePath();
-  ctx.fillStyle = "#b0aaa0";
-  ctx.fill();
-  // snow cap
-  ctx.beginPath();
-  ctx.moveTo(wx - 9, wy - 9);
-  ctx.lineTo(wx - 4, wy - 18);
-  ctx.lineTo(wx + 1, wy - 9);
-  ctx.closePath();
-  ctx.fillStyle = "#f1f2f4";
-  ctx.fill();
-}
-
-function drawTrees(ctx: CanvasRenderingContext2D, wx: number, wy: number): void {
-  for (const [dx, dy] of [
-    [-12, 2],
-    [2, -4],
-    [10, 5],
-  ] as const) {
-    ctx.beginPath();
-    ctx.moveTo(wx + dx - 6, wy + dy + 4);
-    ctx.lineTo(wx + dx, wy + dy - 12);
-    ctx.lineTo(wx + dx + 6, wy + dy + 4);
-    ctx.closePath();
-    ctx.fillStyle = "#3e7d32";
-    ctx.fill();
-    ctx.fillStyle = "#6b4a2b";
-    ctx.fillRect(wx + dx - 1.5, wy + dy + 4, 3, 4);
-  }
-}
-
-function drawResource(ctx: CanvasRenderingContext2D, resource: string, wx: number, wy: number): void {
-  const colors: Record<string, string> = {
-    fruit: "#e5533d",
-    animal: "#a9713f",
-    fish: "#e8f4fa",
-    metal: "#e8c14d",
-    crop: "#f0d878",
-  };
-  ctx.beginPath();
-  ctx.arc(wx + 16, wy - 6, 5, 0, Math.PI * 2);
-  ctx.fillStyle = colors[resource] ?? "#fff";
-  ctx.fill();
-  ctx.strokeStyle = "rgba(0,0,0,0.4)";
-  ctx.lineWidth = 1;
-  ctx.stroke();
-}
-
-function drawBuilding(ctx: CanvasRenderingContext2D, building: string, wx: number, wy: number): void {
-  if (building === "port") {
-    ctx.fillStyle = "#8a6b45";
-    ctx.fillRect(wx - 12, wy - 4, 24, 8);
-    ctx.fillStyle = "#c9a468";
-    ctx.fillRect(wx - 12, wy - 7, 24, 4);
-    return;
-  }
-  // hut-style building
-  ctx.fillStyle = building === "mine" ? "#7d7469" : building === "farm" ? "#caa64f" : "#8a6b45";
-  ctx.fillRect(wx - 8, wy - 6, 16, 10);
-  ctx.beginPath();
-  ctx.moveTo(wx - 10, wy - 6);
-  ctx.lineTo(wx, wy - 14);
-  ctx.lineTo(wx + 10, wy - 6);
-  ctx.closePath();
-  ctx.fillStyle = building === "mine" ? "#5d564e" : "#a5522f";
-  ctx.fill();
-}
-
-function drawVillage(ctx: CanvasRenderingContext2D, wx: number, wy: number): void {
-  ctx.fillStyle = "#c8b79b";
-  ctx.fillRect(wx - 9, wy - 5, 18, 9);
-  ctx.beginPath();
-  ctx.moveTo(wx - 11, wy - 5);
-  ctx.lineTo(wx, wy - 14);
-  ctx.lineTo(wx + 11, wy - 5);
-  ctx.closePath();
-  ctx.fillStyle = "#6d6152";
-  ctx.fill();
-}
-
-/** Broken pillars on a flagstone, distinct from a village's intact roof. */
-function drawRuin(ctx: CanvasRenderingContext2D, wx: number, wy: number): void {
-  ctx.fillStyle = "rgba(30,24,18,0.35)";
-  ctx.beginPath();
-  ctx.ellipse(wx, wy + 3, 15, 7, 0, 0, Math.PI * 2);
-  ctx.fill();
-
-  const pillars: Array<[number, number, number]> = [
-    [-9, 0, 11],
-    [0, -2, 15],
-    [9, 1, 8],
-  ];
-  for (const [dx, dy, h] of pillars) {
-    ctx.fillStyle = "#b9ae97";
-    ctx.fillRect(wx + dx - 2.5, wy + dy - h, 5, h);
-    ctx.fillStyle = "#8c8271";
-    ctx.fillRect(wx + dx + 1, wy + dy - h, 1.5, h);
-    ctx.fillStyle = "#d7cdb6";
-    ctx.fillRect(wx + dx - 3.5, wy + dy - h - 2, 7, 2.5);
-  }
-  // a glint, so a ruin reads as worth walking to
-  ctx.fillStyle = "rgba(255,225,150,0.9)";
-  ctx.beginPath();
-  ctx.arc(wx + 3, wy - 12, 1.8, 0, Math.PI * 2);
-  ctx.fill();
-}
-
-function drawCity(ctx: CanvasRenderingContext2D, state: GameState, city: { ownerId: number; level: number; walls: boolean; isCapital: boolean; name: string }, wx: number, wy: number): void {
-  const tribe = tribeById(state.players[city.ownerId].tribeId);
-
-  if (city.walls) {
-    diamondPath(ctx, wx, wy);
-    ctx.strokeStyle = "#e8e2d6";
-    ctx.lineWidth = 3;
-    ctx.stroke();
-  }
-
-  const houses = Math.min(4, 1 + Math.floor(city.level / 2));
-  const spots: Array<[number, number]> = [
-    [0, -2],
-    [-12, 3],
-    [12, 3],
-    [0, 8],
-  ];
-  for (let h = 0; h < houses; h++) {
-    const [dx, dy] = spots[h];
-    ctx.fillStyle = "#e7dfd2";
-    ctx.fillRect(wx + dx - 7, wy + dy - 6, 14, 9);
-    ctx.beginPath();
-    ctx.moveTo(wx + dx - 8, wy + dy - 6);
-    ctx.lineTo(wx + dx, wy + dy - 13);
-    ctx.lineTo(wx + dx + 8, wy + dy - 6);
-    ctx.closePath();
-    ctx.fillStyle = tribe.color;
-    ctx.fill();
-  }
-
 }
 
 function drawNameplate(
