@@ -1,12 +1,25 @@
 import type { GameState } from "../engine/state";
-import { unitById, playerById } from "../engine/state";
+import { unitById, playerById, unitsOf } from "../engine/state";
 import type { Action } from "../engine/actions";
 import { applyAction } from "../engine/reducer";
 import { computeLegalActions } from "../engine/legalActions";
 import { newGame, type NewGameOptions } from "../engine/mapgen";
 import { HeuristicAgent } from "../ai/heuristicAgent";
+import type { AiPersonality } from "../ai/evaluate";
 import type { AiAgent } from "../ai/agent";
-import { saveGame, loadGame, clearSave } from "./persistence";
+import {
+  saveGame,
+  loadGame,
+  clearSave,
+  saveToSlot,
+  loadFromSlot,
+  clearSlot,
+  exportSave,
+  parseSave,
+  type SavedGame,
+} from "./persistence";
+import { DIFFICULTY_PERSONALITY, type Difficulty } from "./difficulty";
+import { playSound } from "./sound";
 
 export type Screen = "menu" | "game" | "gameover";
 
@@ -18,16 +31,26 @@ export interface FloatEffect {
   bornAt: number;
 }
 
+/** A unit sliding from one tile to another, or flinching from a hit. */
+export interface UnitAnim {
+  unitId: number;
+  kind: "move" | "hit";
+  fromX: number;
+  fromY: number;
+  toX: number;
+  toY: number;
+  bornAt: number;
+  duration: number;
+}
+
+export const MOVE_ANIM_MS = 180;
+export const HIT_ANIM_MS = 260;
+
 export const HUMAN_ID = 0;
 const AI_STEP_MS = 140;
 const AI_ACTION_CAP = 250;
 
-export type Difficulty = "relaxed" | "normal" | "hard";
-const DIFFICULTY_AGGRESSION: Record<Difficulty, number> = {
-  relaxed: 0.6,
-  normal: 1,
-  hard: 1.5,
-};
+export type { Difficulty };
 
 class GameController {
   state: GameState | null = null;
@@ -36,9 +59,15 @@ class GameController {
   selectedTile: [number, number] | null = null;
   legal: Action[] = [];
   floats: FloatEffect[] = [];
+  anims: UnitAnim[] = [];
+  /** Tile the view should jump to, consumed by the map once applied. */
+  focusRequest: [number, number] | null = null;
   aiBusy = false;
   revealAll = false;
+  /** Timestamp of the last successful autosave, for the "Saved" indicator. */
+  lastSavedAt: number | null = null;
 
+  private difficulty: Difficulty = "normal";
   private agents = new Map<number, AiAgent>();
   private version = 0;
   private listeners = new Set<() => void>();
@@ -58,34 +87,31 @@ class GameController {
   startNewGame(opts: NewGameOptions, difficulty: Difficulty): void {
     this.state = newGame(opts);
     this.agents.clear();
-    const aggression = DIFFICULTY_AGGRESSION[difficulty];
-    for (const p of this.state.players) {
-      if (!p.isHuman) this.agents.set(p.id, new HeuristicAgent({ aggression }));
-    }
+    this.difficulty = difficulty;
+    this.spawnAgents();
     this.screen = "game";
     this.selectedUnitId = null;
     this.selectedTile = null;
     this.floats = [];
+    this.anims = [];
     this.refreshLegal();
-    saveGame(this.state);
+    this.persist();
     this.notify();
+  }
+
+  /** One agent per AI player, all sharing the current difficulty's personality. */
+  private spawnAgents(): void {
+    if (!this.state) return;
+    const personality: AiPersonality = DIFFICULTY_PERSONALITY[this.difficulty];
+    this.agents.clear();
+    for (const p of this.state.players) {
+      if (!p.isHuman) this.agents.set(p.id, new HeuristicAgent(personality));
+    }
   }
 
   continueGame(): boolean {
     const loaded = loadGame();
-    if (!loaded) return false;
-    this.state = loaded;
-    this.agents.clear();
-    for (const p of loaded.players) {
-      if (!p.isHuman) this.agents.set(p.id, new HeuristicAgent({ aggression: 1 }));
-    }
-    this.screen = loaded.winnerId !== null ? "gameover" : "game";
-    this.refreshLegal();
-    this.notify();
-    if (this.state.currentPlayerId !== HUMAN_ID && this.state.winnerId === null) {
-      void this.runAiTurns();
-    }
-    return true;
+    return loaded ? this.adoptSave(loaded) : false;
   }
 
   backToMenu(): void {
@@ -107,8 +133,69 @@ class GameController {
   abandonGame(): void {
     clearSave();
     this.state = null;
+    this.lastSavedAt = null;
     this.screen = "menu";
     this.notify();
+  }
+
+  /** Write the current game to storage, recording when it happened. */
+  private persist(): void {
+    if (!this.state) return;
+    if (saveGame(this.state, this.difficulty)) this.lastSavedAt = Date.now();
+  }
+
+  /** Flush a save outside the normal action flow (tab hidden, page unloading). */
+  saveNow(): void {
+    if (!this.state || this.state.winnerId !== null) return;
+    this.persist();
+  }
+
+  /** Copy the current game into a named slot, so it survives the autosave. */
+  saveToSlot(slot: number): boolean {
+    if (!this.state) return false;
+    const ok = saveToSlot(slot, this.state, this.difficulty);
+    this.notify();
+    return ok;
+  }
+
+  loadFromSlot(slot: number): boolean {
+    const loaded = loadFromSlot(slot);
+    return loaded ? this.adoptSave(loaded) : false;
+  }
+
+  clearSlot(slot: number): void {
+    clearSlot(slot);
+    this.notify();
+  }
+
+  /** Text of the current game, for moving it to another device. */
+  exportCurrent(): string | null {
+    return this.state ? exportSave(this.state, this.difficulty) : null;
+  }
+
+  /** Load a game from pasted or uploaded save text. */
+  importSave(text: string): boolean {
+    const loaded = parseSave(text);
+    return loaded ? this.adoptSave(loaded) : false;
+  }
+
+  /** Take a loaded save as the live game and start playing it. */
+  private adoptSave(loaded: SavedGame): boolean {
+    this.state = loaded.state;
+    this.difficulty = loaded.difficulty;
+    this.floats = [];
+    this.anims = [];
+    this.selectedUnitId = null;
+    this.selectedTile = null;
+    this.spawnAgents();
+    this.screen = this.state.winnerId !== null ? "gameover" : "game";
+    this.refreshLegal();
+    this.persist();
+    this.notify();
+    if (this.state.currentPlayerId !== HUMAN_ID && this.state.winnerId === null) {
+      void this.runAiTurns();
+    }
+    return true;
   }
 
   /** Dispatch a human action. */
@@ -123,7 +210,7 @@ class GameController {
       this.screen = "gameover";
       clearSave();
     } else {
-      saveGame(this.state);
+      this.persist();
     }
     this.notify();
     if (this.state.currentPlayerId !== HUMAN_ID && this.state.winnerId === null) {
@@ -152,8 +239,17 @@ class GameController {
     this.legal = this.state ? computeLegalActions(this.state, HUMAN_ID) : [];
   }
 
-  private applyWithEffects(action: Action): void {
+  /**
+   * Apply an action and stage its feedback. `perceived` is false for AI actions
+   * happening inside fog: those must stay silent and invisible, or the player
+   * hears and sees things they have not scouted.
+   */
+  private applyWithEffects(action: Action, perceived = true): void {
     if (!this.state) return;
+    if (!perceived) {
+      this.state = applyAction(this.state, action);
+      return;
+    }
     if (action.type === "ATTACK") {
       const target = unitById(this.state, action.targetId);
       const attacker = unitById(this.state, action.unitId);
@@ -163,11 +259,18 @@ class GameController {
       if (target) {
         const dmg = target.hp - (targetAfter?.hp ?? 0);
         this.addFloat(target.x, target.y, targetAfter ? `-${dmg}` : "☠", "#ff6655");
+        if (targetAfter) this.addHit(target.id, target.x, target.y);
       }
       if (attacker && attacker.hp !== (attackerAfter?.hp ?? attacker.hp)) {
         const dmg = attacker.hp - (attackerAfter?.hp ?? 0);
         this.addFloat(attacker.x, attacker.y, attackerAfter ? `-${dmg}` : "☠", "#ffaa44");
+        if (attackerAfter) this.addHit(attacker.id, attacker.x, attacker.y);
       }
+      // a melee attacker steps into the tile it just cleared
+      if (attacker && attackerAfter && !targetAfter && (attackerAfter.x !== attacker.x || attackerAfter.y !== attacker.y)) {
+        this.addMove(attacker.id, attacker.x, attacker.y, attackerAfter.x, attackerAfter.y);
+      }
+      playSound(targetAfter ? "attack" : "kill");
       this.state = next;
     } else if (action.type === "RECOVER") {
       const unit = unitById(this.state, action.unitId);
@@ -175,9 +278,56 @@ class GameController {
       const after = unitById(next, action.unitId);
       if (unit && after) this.addFloat(unit.x, unit.y, `+${after.hp - unit.hp}`, "#66dd66");
       this.state = next;
-    } else {
+    } else if (action.type === "MOVE") {
+      const unit = unitById(this.state, action.unitId);
+      if (unit) this.addMove(unit.id, unit.x, unit.y, action.x, action.y);
+      playSound("move");
       this.state = applyAction(this.state, action);
+      const ruin = this.state.lastRuinReward;
+      if (ruin) {
+        this.addFloat(ruin.x, ruin.y, ruin.label, ruin.playerId === HUMAN_ID ? "#ffd75e" : "#c8b79b");
+        playSound(ruin.playerId === HUMAN_ID ? "levelUp" : "capture");
+      }
+    } else {
+      const before = this.state;
+      this.state = applyAction(before, action);
+      if (action.type === "CAPTURE") playSound("capture");
+      else if (action.type === "CHOOSE_REWARD") playSound("levelUp");
+      else if (action.type === "END_TURN" && before.currentPlayerId === HUMAN_ID) playSound("endTurn");
     }
+  }
+
+  private addMove(unitId: number, fromX: number, fromY: number, toX: number, toY: number): void {
+    this.anims = this.anims.filter((a) => a.unitId !== unitId);
+    this.anims.push({ unitId, kind: "move", fromX, fromY, toX, toY, bornAt: performance.now(), duration: MOVE_ANIM_MS });
+  }
+
+  private addHit(unitId: number, x: number, y: number): void {
+    this.anims = this.anims.filter((a) => a.unitId !== unitId);
+    this.anims.push({ unitId, kind: "hit", fromX: x, fromY: y, toX: x, toY: y, bornAt: performance.now(), duration: HIT_ANIM_MS });
+  }
+
+  /** Own units that can still do something this turn. */
+  idleUnits(): number[] {
+    const s = this.state;
+    if (!s || s.currentPlayerId !== HUMAN_ID || this.aiBusy) return [];
+    return unitsOf(s, HUMAN_ID)
+      .filter((u) => !u.moved || !u.attacked)
+      .map((u) => u.id);
+  }
+
+  /** Select the next unit with actions left and ask the map to show it. */
+  cycleIdleUnit(): void {
+    const ids = this.idleUnits();
+    if (ids.length === 0) return;
+    const at = this.selectedUnitId === null ? -1 : ids.indexOf(this.selectedUnitId);
+    const next = ids[(at + 1) % ids.length];
+    const unit = this.state ? unitById(this.state, next) : null;
+    this.selectedUnitId = next;
+    this.selectedTile = null;
+    if (unit) this.focusRequest = [unit.x, unit.y];
+    playSound("select");
+    this.notify();
   }
 
   private addFloat(x: number, y: number, text: string, color: string): void {
@@ -214,7 +364,7 @@ class GameController {
         ) {
           const action = actionsThisTurn === AI_ACTION_CAP - 1 ? ({ type: "END_TURN" } as Action) : agent.chooseAction(this.state, pid);
           const visible = this.isActionVisible(action);
-          this.applyWithEffects(action);
+          this.applyWithEffects(action, visible);
           actionsThisTurn++;
           this.notify();
           if (visible) await sleep(AI_STEP_MS);
@@ -232,7 +382,7 @@ class GameController {
           this.screen = "gameover";
           clearSave();
         } else {
-          saveGame(this.state);
+          this.persist();
         }
       }
       this.notify();
@@ -274,4 +424,11 @@ declare global {
     __pf?: GameController;
   }
 }
-if (typeof window !== "undefined") window.__pf = controller;
+if (typeof window !== "undefined") {
+  window.__pf = controller;
+  // Mobile browsers can discard a backgrounded tab without warning; flush then.
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden) controller.saveNow();
+  });
+  window.addEventListener("pagehide", () => controller.saveNow());
+}

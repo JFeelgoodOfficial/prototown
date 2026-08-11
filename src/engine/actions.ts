@@ -6,6 +6,7 @@ export type Action =
   | { type: "ATTACK"; unitId: number; targetId: number }
   | { type: "CAPTURE"; unitId: number }
   | { type: "RECOVER"; unitId: number }
+  | { type: "FORTIFY"; unitId: number }
   | { type: "DISBAND"; unitId: number }
   | { type: "UPGRADE_BOAT"; unitId: number }
   | { type: "HARVEST"; x: number; y: number }

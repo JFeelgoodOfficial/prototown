@@ -10,6 +10,69 @@ import { cityUnitCount, cityCapacity } from "../engine/economy";
 export interface AiPersonality {
   /** multiplies attack/military scores; 1 = balanced */
   aggression: number;
+  /** multiplies the pull toward villages and enemy cities */
+  expansion: number;
+  /** multiplies harvesting and building */
+  economy: number;
+  /** multiplies research */
+  research: number;
+  /**
+   * How many of the best-looking actions get played out and judged by the
+   * resulting position. 0 keeps the agent purely greedy.
+   */
+  lookahead: number;
+  /**
+   * How many of those candidates also get the strongest rival's best reply
+   * played out against them, so a move into a killing blow is seen as one.
+   * 0 stops at the agent's own move.
+   */
+  replies: number;
+}
+
+export const BALANCED: AiPersonality = {
+  aggression: 1,
+  expansion: 1,
+  economy: 1,
+  research: 1,
+  lookahead: 3,
+  replies: 0,
+};
+
+/**
+ * Static worth of a position to one player: what they hold, what it is worth
+ * militarily, and how exposed it is. Used to judge candidate actions by their
+ * outcome rather than by the action alone.
+ */
+export function evaluatePosition(state: GameState, playerId: number): number {
+  let value = 0;
+
+  for (const c of state.cities) {
+    const mine = c.ownerId === playerId;
+    const worth = 120 + c.level * 40 + (c.isCapital ? 60 : 0);
+    value += mine ? worth : -worth * 0.7;
+  }
+
+  for (const u of state.units) {
+    const def = UNITS[u.type];
+    const health = u.hp / u.maxHp;
+    const worth = (12 + def.cost * 6) * (0.5 + 0.5 * health);
+    value += u.ownerId === playerId ? worth : -worth * 0.8;
+  }
+
+  const player = playerById(state, playerId);
+  value += player.stars * 1.5;
+  for (const techId of player.techs) value += TECH_BY_ID[techId].tier * 8;
+
+  // Standing next to a village or an enemy city is worth something on its own:
+  // it is a capture waiting to happen.
+  for (const u of unitsOf(state, playerId)) {
+    const tile = tileAt(state, u.x, u.y);
+    if (tile.village) value += 70;
+    if (tile.cityHere !== null && cityById(state, tile.cityHere)?.ownerId !== playerId) value += 90;
+    if (tile.ruin) value += 40;
+  }
+
+  return value;
 }
 
 interface Objective {
@@ -67,7 +130,7 @@ export function scoreAction(
     }
 
     case "CAPTURE":
-      return 1000;
+      return 1000 * personality.expansion;
 
     case "MOVE": {
       const unit = unitById(state, action.unitId);
@@ -76,13 +139,13 @@ export function scoreAction(
       if (!best) return 0;
       const before = dist(unit.x, unit.y, best.x, best.y);
       const after = dist(action.x, action.y, best.x, best.y);
-      let score = (before - after) * 8 * best.weight;
+      let score = (before - after) * 8 * best.weight * personality.expansion;
       // landing on a village/city tile sets up next-turn capture
       const destTile = tileAt(state, action.x, action.y);
-      if (destTile.village) score += 60;
+      if (destTile.village) score += 60 * personality.expansion;
       if (destTile.cityHere !== null) {
         const c = cityById(state, destTile.cityHere);
-        if (c && c.ownerId !== playerId) score += 60;
+        if (c && c.ownerId !== playerId) score += 60 * personality.expansion;
       }
       // wounded units prefer own territory
       if (unit.hp < unit.maxHp / 2) {
@@ -90,6 +153,21 @@ export function scoreAction(
         if (own) score += 12;
       }
       return score;
+    }
+
+    case "FORTIFY": {
+      const unit = unitById(state, action.unitId);
+      if (!unit) return -Infinity;
+      // Worth doing where the ground matters: holding a settlement, or with
+      // enemies close enough to attack next turn.
+      const tile = tileAt(state, unit.x, unit.y);
+      const holdsSettlement =
+        tile.cityHere !== null && cityById(state, tile.cityHere)?.ownerId === playerId;
+      const threatened = state.units.some(
+        (e) => e.ownerId !== playerId && dist(e.x, e.y, unit.x, unit.y) <= 2,
+      );
+      if (!threatened && !holdsSettlement) return 1;
+      return (holdsSettlement ? 26 : 0) + (threatened ? 20 : 0);
     }
 
     case "RECOVER": {
@@ -100,17 +178,20 @@ export function scoreAction(
     }
 
     case "HARVEST":
-      return 55;
+      return 55 * personality.economy;
 
     case "BUILD":
-      return 50;
+      return 50 * personality.economy;
 
     case "TRAIN": {
       const city = cityById(state, action.cityId);
       if (!city) return -Infinity;
       const army = unitsOf(state, playerId).length;
       const cities = citiesOf(state, playerId).length;
-      const wantArmy = cities * 2 + 1;
+      // A more aggressive opponent keeps a larger standing army, but only
+      // half as much larger as its aggression — scaling it fully starves the
+      // economy that pays for the army in the first place.
+      const wantArmy = Math.round((cities * 2 + 1) * (1 + (personality.aggression - 1) * 0.5));
       if (army >= wantArmy) return -5;
       if (cityUnitCount(state, city.id) >= cityCapacity(city)) return -Infinity;
       const def = UNITS[action.unitType];
@@ -125,7 +206,7 @@ export function scoreAction(
       if (["archery", "shields", "smithery", "chivalry"].includes(tech.id)) score += 8 * personality.aggression;
       // don't spend everything on research when broke
       if (player.stars < 8) score -= 15;
-      return score;
+      return score * personality.research;
     }
 
     case "CHOOSE_REWARD": {

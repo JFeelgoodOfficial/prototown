@@ -11,4 +11,26 @@ body,
   font-family: ui-sans-serif, system-ui, sans-serif;
   -webkit-user-select: none;
   user-select: none;
+  /* no double-tap page zoom on UI chrome, no pull-to-refresh interrupting a map drag */
+  touch-action: manipulation;
+  overscroll-behavior: none;
+}
+
+@keyframes save-flash {
+  0% {
+    opacity: 0;
+  }
+  15% {
+    opacity: 1;
+  }
+  70% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+.animate-save-flash {
+  animation: save-flash 1.6s ease-out forwards;
 }

@@ -28,6 +28,8 @@ export interface ViewOptions {
   hoverTile: [number, number] | null;
   floatingTexts: FloatingText[];
   revealAll: boolean;
+  /** world-space offsets per unit id, for move slides and hit flinches */
+  unitOffsets?: Map<number, [number, number]>;
 }
 
 /** Fits the 100-unit-tall authored figures onto a 72x36 iso tile. */
@@ -41,6 +43,20 @@ const TERRAIN_COLORS: Record<string, [string, string]> = {
   ocean: ["#2f7db3", "#256795"],
 };
 
+/** Draw order only depends on map size, but the loop runs every frame. */
+const drawOrderCache = new Map<number, Array<[number, number]>>();
+function cachedDrawOrder(size: number): Array<[number, number]> {
+  let order = drawOrderCache.get(size);
+  if (!order) {
+    order = drawOrder(size);
+    drawOrderCache.set(size, order);
+  }
+  return order;
+}
+
+/** City names never change, so their measured plate width can be measured once. */
+const nameplateWidths = new Map<string, number>();
+
 export function render(ctx: CanvasRenderingContext2D, state: GameState, view: ViewOptions): void {
   const { camera, width, height } = view;
   ctx.save();
@@ -51,8 +67,22 @@ export function render(ctx: CanvasRenderingContext2D, state: GameState, view: Vi
   ctx.scale(camera.zoom, camera.zoom);
   ctx.translate(-camera.x, -camera.y);
 
-  const order = drawOrder(state.size);
+  const order = cachedDrawOrder(state.size);
   const reachSet = new Set(view.reachable.map(([x, y]) => y * state.size + x));
+  const attackSet = new Set(view.attackableUnitIds);
+  const unitsByTile = new Map<number, Unit>();
+  for (const u of state.units) unitsByTile.set(u.y * state.size + u.x, u);
+
+  // Cull to the visible world rect, padded for art that overhangs its tile
+  // (mountains and figures above, nameplates below).
+  const halfW = width / (2 * camera.zoom);
+  const halfH = height / (2 * camera.zoom);
+  const cullMinX = camera.x - halfW - TILE_W;
+  const cullMaxX = camera.x + halfW + TILE_W;
+  const cullMinY = camera.y - halfH - 96;
+  const cullMaxY = camera.y + halfH + TILE_H * 2;
+  const offscreen = (wx: number, wy: number): boolean =>
+    wx < cullMinX || wx > cullMaxX || wy < cullMinY || wy > cullMaxY;
 
   // Pass 1: tiles
   for (const [x, y] of order) {
@@ -60,6 +90,7 @@ export function render(ctx: CanvasRenderingContext2D, state: GameState, view: Vi
     const explored = view.revealAll || view.explored[i] === 1;
     const tile = state.tiles[i];
     const [wx, wy] = gridToWorld(x, y);
+    if (offscreen(wx, wy)) continue;
     if (!explored) {
       drawCloud(ctx, wx, wy);
       continue;
@@ -84,7 +115,7 @@ export function render(ctx: CanvasRenderingContext2D, state: GameState, view: Vi
   // Pass 2: units (skip enemies on unwatched tiles)
   for (const [x, y] of order) {
     const i = idx(state, x, y);
-    const unit = state.units.find((u) => u.x === x && u.y === y);
+    const unit = unitsByTile.get(i);
     if (!unit) continue;
     const visible =
       view.revealAll ||
@@ -92,7 +123,17 @@ export function render(ctx: CanvasRenderingContext2D, state: GameState, view: Vi
       (view.explored[i] === 1 && view.watched[i] === 1);
     if (!visible) continue;
     const [wx, wy] = gridToWorld(x, y);
-    drawUnit(ctx, state, unit, wx, wy, unit.id === view.selectedUnitId, view.attackableUnitIds.includes(unit.id));
+    if (offscreen(wx, wy)) continue;
+    const off = view.unitOffsets?.get(unit.id);
+    drawUnit(
+      ctx,
+      state,
+      unit,
+      wx + (off ? off[0] : 0),
+      wy + (off ? off[1] : 0),
+      unit.id === view.selectedUnitId,
+      attackSet.has(unit.id),
+    );
   }
 
   // Pass 3: city nameplates on top of everything (tiles drawn later would cover them)
@@ -100,6 +141,7 @@ export function render(ctx: CanvasRenderingContext2D, state: GameState, view: Vi
     const i = idx(state, city.x, city.y);
     if (!view.revealAll && view.explored[i] !== 1) continue;
     const [wx, wy] = gridToWorld(city.x, city.y);
+    if (offscreen(wx, wy)) continue;
     drawNameplate(ctx, state, city, wx, wy);
   }
 
@@ -171,6 +213,7 @@ function drawTile(ctx: CanvasRenderingContext2D, state: GameState, tile: Tile, w
   if (tile.resource) drawResource(ctx, tile.resource, wx, wy);
   if (tile.building) drawBuilding(ctx, tile.building, wx, wy);
   if (tile.village) drawVillage(ctx, wx, wy);
+  if (tile.ruin) drawRuin(ctx, wx, wy);
   if (tile.cityHere !== null) {
     const city = cityById(state, tile.cityHere);
     if (city) drawCity(ctx, state, city, wx, wy);
@@ -269,6 +312,33 @@ function drawVillage(ctx: CanvasRenderingContext2D, wx: number, wy: number): voi
   ctx.fill();
 }
 
+/** Broken pillars on a flagstone, distinct from a village's intact roof. */
+function drawRuin(ctx: CanvasRenderingContext2D, wx: number, wy: number): void {
+  ctx.fillStyle = "rgba(30,24,18,0.35)";
+  ctx.beginPath();
+  ctx.ellipse(wx, wy + 3, 15, 7, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  const pillars: Array<[number, number, number]> = [
+    [-9, 0, 11],
+    [0, -2, 15],
+    [9, 1, 8],
+  ];
+  for (const [dx, dy, h] of pillars) {
+    ctx.fillStyle = "#b9ae97";
+    ctx.fillRect(wx + dx - 2.5, wy + dy - h, 5, h);
+    ctx.fillStyle = "#8c8271";
+    ctx.fillRect(wx + dx + 1, wy + dy - h, 1.5, h);
+    ctx.fillStyle = "#d7cdb6";
+    ctx.fillRect(wx + dx - 3.5, wy + dy - h - 2, 7, 2.5);
+  }
+  // a glint, so a ruin reads as worth walking to
+  ctx.fillStyle = "rgba(255,225,150,0.9)";
+  ctx.beginPath();
+  ctx.arc(wx + 3, wy - 12, 1.8, 0, Math.PI * 2);
+  ctx.fill();
+}
+
 function drawCity(ctx: CanvasRenderingContext2D, state: GameState, city: { ownerId: number; level: number; walls: boolean; isCapital: boolean; name: string }, wx: number, wy: number): void {
   const tribe = tribeById(state.players[city.ownerId].tribeId);
 
@@ -310,7 +380,11 @@ function drawNameplate(
 ): void {
   const tribe = tribeById(state.players[city.ownerId].tribeId);
   ctx.font = "bold 11px sans-serif";
-  const w = ctx.measureText(city.name).width + 26;
+  let w = nameplateWidths.get(city.name);
+  if (w === undefined) {
+    w = ctx.measureText(city.name).width + 26;
+    nameplateWidths.set(city.name, w);
+  }
   ctx.fillStyle = "rgba(10,15,25,0.8)";
   roundRect(ctx, wx - w / 2, wy + TILE_H / 2 + 2, w, 16, 5);
   ctx.fill();
@@ -339,6 +413,14 @@ function drawUnit(ctx: CanvasRenderingContext2D, state: GameState, unit: Unit, w
   const tribe = tribeById(state.players[unit.ownerId].tribeId);
 
   // Rings go down first so the figure stands on top of them.
+  if (unit.fortified) {
+    // a low earthwork the figure stands behind
+    ctx.beginPath();
+    ctx.ellipse(wx, wy + 5, 20, 10, 0, Math.PI * 0.08, Math.PI * 0.92);
+    ctx.strokeStyle = "rgba(150,190,230,0.85)";
+    ctx.lineWidth = 3;
+    ctx.stroke();
+  }
   if (selected) {
     ctx.beginPath();
     ctx.ellipse(wx, wy + 4, 18, 9, 0, 0, Math.PI * 2);

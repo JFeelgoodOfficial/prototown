@@ -1,4 +1,4 @@
-import type { GameState, Unit, City } from "./state";
+import type { GameState, Unit, City, Tile, RuinRewardKind } from "./state";
 import {
   cloneState,
   tileAt,
@@ -11,17 +11,20 @@ import {
   neighbors,
   idx,
   inBounds,
+  dist,
 } from "./state";
 import type { Action } from "./actions";
 import { resolveCombat, unitRange } from "./combat";
+import { terrainOpenTo } from "./movement";
 import { computeVisibility } from "./fog";
 import { claimTerritory } from "./mapgen";
 import { updateWinState } from "./win";
+import { playerScore } from "./score";
 import { addPopulation, playerIncome } from "./economy";
 import { nextInt } from "./rng";
 import { UNITS, NAVAL } from "../data/units";
 import { TERRAIN } from "../data/terrain";
-import { techCost } from "../data/techs";
+import { techCost, TECHS } from "../data/techs";
 import { tribeById } from "../data/tribes";
 import {
   HARVEST_DEFS,
@@ -32,6 +35,9 @@ import {
   REWARD_POPULATION_AMOUNT,
   VETERAN_KILLS,
   VETERAN_HP_BONUS,
+  RUIN_STARS,
+  RUIN_POPULATION,
+  RUIN_MAP_RADIUS,
 } from "../data/constants";
 
 /**
@@ -42,6 +48,7 @@ import {
 export function applyAction(prev: GameState, action: Action): GameState {
   const state = cloneState(prev);
   const player = playerById(state, state.currentPlayerId);
+  state.lastRuinReward = null;
 
   switch (action.type) {
     case "MOVE": {
@@ -50,13 +57,19 @@ export function applyAction(prev: GameState, action: Action): GameState {
       const to = tileAt(state, action.x, action.y);
       const toWater = TERRAIN[to.terrain].water;
       if (unit.embarked === null && toWater) {
-        unit.embarked = from.building === "port" ? "raft" : "raft";
+        // Launching always happens at a port (movement enforces it). A port
+        // belonging to a player who knows Sailing puts out a ship directly,
+        // so the tech pays off at the dock instead of only as a paid refit.
+        const fromPort = from.building === "port";
+        unit.embarked = fromPort && hasTech(player, "sailing") ? "ship" : "raft";
       } else if (unit.embarked !== null && !toWater) {
         unit.embarked = null;
       }
       unit.x = action.x;
       unit.y = action.y;
       unit.moved = true;
+      unit.fortified = false; // leaving the position gives up the dug-in bonus
+      if (to.ruin) claimRuin(state, unit, to);
       computeVisibility(state, player);
       break;
     }
@@ -70,6 +83,7 @@ export function applyAction(prev: GameState, action: Action): GameState {
       attacker.hp -= result.damageToAttacker;
       attacker.moved = true;
       attacker.attacked = true;
+      attacker.fortified = false; // swinging out of the position breaks the dig-in
 
       if (result.defenderDies) {
         state.units = state.units.filter((u) => u.id !== defender.id);
@@ -146,6 +160,14 @@ export function applyAction(prev: GameState, action: Action): GameState {
       break;
     }
 
+    case "FORTIFY": {
+      const unit = mustUnit(state, action.unitId);
+      unit.fortified = true;
+      unit.moved = true;
+      unit.attacked = true;
+      break;
+    }
+
     case "DISBAND": {
       const unit = mustUnit(state, action.unitId);
       player.stars += Math.floor(UNITS[unit.type].cost / 2);
@@ -197,6 +219,7 @@ export function applyAction(prev: GameState, action: Action): GameState {
         veteran: false,
         moved: true,
         attacked: true,
+        fortified: false,
         embarked: null,
       };
       state.units.push(unit);
@@ -242,11 +265,11 @@ function maybePromote(unit: Unit): void {
 
 /** Can this unit stand on (x,y) after a kill: terrain class matches its mode. */
 function canOccupy(state: GameState, unit: Unit, x: number, y: number): boolean {
-  const terr = TERRAIN[tileAt(state, x, y).terrain];
+  const tile = tileAt(state, x, y);
+  const terr = TERRAIN[tile.terrain];
   if (terr.water) return unit.embarked !== null;
   if (unit.embarked !== null) return false;
-  if (terr.requiresTech && !hasTech(playerById(state, unit.ownerId), terr.requiresTech)) return false;
-  return true;
+  return terrainOpenTo(state, unit.ownerId)(tile.terrain);
 }
 
 function applyReward(state: GameState, city: City, reward: string): void {
@@ -300,7 +323,8 @@ function applyReward(state: GameState, city: City, reward: string): void {
           veteran: false,
           moved: true,
           attacked: true,
-          embarked: null,
+          fortified: false,
+        embarked: null,
         });
       }
       break;
@@ -308,6 +332,68 @@ function applyReward(state: GameState, city: City, reward: string): void {
     default:
       throw new Error(`unknown reward ${reward}`);
   }
+}
+
+/**
+ * A unit walks into a ruin and takes what is there. The draw comes from the
+ * seeded RNG in state, so a replay of the same game finds the same things.
+ */
+function claimRuin(state: GameState, unit: Unit, tile: Tile): void {
+  tile.ruin = false;
+  const player = playerById(state, unit.ownerId);
+  const canPromote = !unit.veteran && unit.type !== "giant";
+  const ownCities = citiesOf(state, player.id);
+  const researchable = TECHS.filter(
+    (t) => !player.techs.includes(t.id) && (!t.requires || player.techs.includes(t.requires)),
+  );
+
+  const options: RuinRewardKind[] = ["stars", "map"];
+  if (researchable.length > 0) options.push("tech");
+  if (canPromote) options.push("veteran");
+  if (ownCities.length > 0) options.push("population");
+  const kind = options[nextInt(state, options.length)];
+
+  let label: string;
+  switch (kind) {
+    case "stars":
+      player.stars += RUIN_STARS;
+      label = `+${RUIN_STARS} stars`;
+      break;
+    case "tech": {
+      const tech = researchable[nextInt(state, researchable.length)];
+      player.techs.push(tech.id);
+      label = `${tech.name} discovered`;
+      break;
+    }
+    case "veteran":
+      unit.veteran = true;
+      unit.maxHp += VETERAN_HP_BONUS;
+      unit.hp = unit.maxHp;
+      label = "Veteran!";
+      break;
+    case "population": {
+      // the closest city takes in whoever was sheltering here
+      let best = ownCities[0];
+      for (const c of ownCities) {
+        if (dist(unit.x, unit.y, c.x, c.y) < dist(unit.x, unit.y, best.x, best.y)) best = c;
+      }
+      addPopulation(best, RUIN_POPULATION);
+      label = `${best.name} +${RUIN_POPULATION} pop`;
+      break;
+    }
+    case "map": {
+      for (let dy = -RUIN_MAP_RADIUS; dy <= RUIN_MAP_RADIUS; dy++) {
+        for (let dx = -RUIN_MAP_RADIUS; dx <= RUIN_MAP_RADIUS; dx++) {
+          const x = unit.x + dx;
+          const y = unit.y + dy;
+          if (inBounds(state, x, y)) player.explored[idx(state, x, y)] = 1;
+        }
+      }
+      label = "Maps found";
+      break;
+    }
+  }
+  state.lastRuinReward = { kind, x: unit.x, y: unit.y, playerId: player.id, label };
 }
 
 function findSpawnSpot(state: GameState, city: City): [number, number] | null {
@@ -326,6 +412,8 @@ function advanceTurn(state: GameState): void {
   for (let step = 0; step < order.length; step++) {
     i = (i + 1) % order.length;
     if (i === 0) {
+      // a full round has passed: snapshot everyone's score for the end-game graph
+      state.scoreHistory.push(state.players.map((p) => playerScore(state, p.id)));
       state.turn += 1;
       updateWinState(state);
       if (state.winnerId !== null) return;

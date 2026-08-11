@@ -7,7 +7,7 @@ export function makeTestState(size = 8): GameState {
   const tiles: Tile[] = [];
   for (let y = 0; y < size; y++)
     for (let x = 0; x < size; x++)
-      tiles.push({ x, y, terrain: "field", resource: null, building: null, cityId: null, village: false, cityHere: null });
+      tiles.push({ x, y, terrain: "field", resource: null, building: null, cityId: null, village: false, cityHere: null, ruin: false });
 
   const state: GameState = {
     seed: 1,
@@ -23,10 +23,16 @@ export function makeTestState(size = 8): GameState {
     winMode: "domination",
     maxTurns: 30,
     winnerId: null,
+    lastRuinReward: null,
+    scoreHistory: [],
   };
 
-  addPlayer(state, "meridia", true);
-  addPlayer(state, "ashfen", false);
+  // Korvani (boat speed) and Thornwood (climbing) are the two tribes whose
+  // abilities leave land combat and income untouched, so the formula tests
+  // below measure the rules rather than a tribe bonus. Tests that care about
+  // an ability set the tribe themselves.
+  addPlayer(state, "korvani", true);
+  addPlayer(state, "thornwood", false);
   addCity(state, 0, 1, 1, true);
   addCity(state, 1, size - 2, size - 2, true);
   return state;
@@ -92,7 +98,8 @@ export function addUnit(state: GameState, ownerId: number, type: UnitType, x: nu
     veteran: false,
     moved: false,
     attacked: false,
-    embarked: null,
+    fortified: false,
+      embarked: null,
   };
   state.units.push(u);
   return u;

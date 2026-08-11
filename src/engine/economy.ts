@@ -1,6 +1,7 @@
 import type { GameState, City } from "./state";
 import { citiesOf, unitsOf } from "./state";
 import { CITY_BASE_INCOME, CAPITAL_INCOME_BONUS, WORKSHOP_INCOME, LEVEL_REWARDS } from "../data/constants";
+import { abilityOf } from "./tribeAbility";
 
 /** Stars per turn for one city: base + (level-1) + capital + workshop. */
 export function cityIncome(city: City): number {
@@ -8,7 +9,10 @@ export function cityIncome(city: City): number {
 }
 
 export function playerIncome(state: GameState, playerId: number): number {
-  return citiesOf(state, playerId).reduce((sum, c) => sum + cityIncome(c), 0);
+  const cities = citiesOf(state, playerId);
+  const base = cities.reduce((sum, c) => sum + cityIncome(c), 0);
+  // a tribe with no cities left is being eliminated; no stipend for them
+  return cities.length === 0 ? 0 : base + abilityOf(state, playerId).incomeBonus;
 }
 
 /** Population needed to go from the city's current level to the next. */

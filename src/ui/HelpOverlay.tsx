@@ -19,10 +19,27 @@ export default function HelpOverlay({ onClose }: { onClose: () => void }) {
           <List
             title="Controls"
             items={[
-              "Click a unit to select it — white tiles are moves, red rings are attack targets.",
-              "Click a highlighted tile or enemy to move or attack.",
-              "Drag to pan the map, scroll to zoom.",
+              "Tap or click a unit to select it — white tiles are moves, red rings are attack targets.",
+              "Tap a highlighted tile or enemy to move or attack.",
+              "Drag to pan; pinch or scroll to zoom. Use the corner buttons to zoom or fit the whole map.",
               "Click your city to train units; click resource tiles in your borders to harvest or build.",
+            ]}
+          />
+          <List
+            title="Keyboard"
+            items={[
+              "Tab — jump to the next unit that can still act.",
+              "Space — end your turn.",
+              "Esc — deselect. + and − zoom, F fits the map to the screen.",
+            ]}
+          />
+          <List
+            title="Your tribe"
+            items={[
+              "Ashfen (Forgefire) — attacks deal 25% more damage.",
+              "Korvani (Tidebound) — boats move one tile further.",
+              "Meridia (Suntithe) — one extra star every turn.",
+              "Thornwood (Surefoot) — crosses mountains without Climbing.",
             ]}
           />
           <List
@@ -31,6 +48,7 @@ export default function HelpOverlay({ onClose }: { onClose: () => void }) {
               "Cities pay stars every turn — higher level pays more; capitals and workshops pay extra.",
               "Harvest fruit, animals, and fish (needs the matching tech) to grow city population.",
               "Farms, mines, lumber huts, and ports grow population faster.",
+              "Ports are the only way to put to sea — with Sailing they launch ships instead of rafts.",
               "When population fills the bar, the city levels up and you pick a reward.",
             ]}
           />

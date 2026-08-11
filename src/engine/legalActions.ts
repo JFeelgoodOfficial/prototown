@@ -67,6 +67,9 @@ export function computeLegalActions(state: GameState, playerId: number): Action[
     if (!unit.moved && !unit.attacked && unit.hp < unit.maxHp) {
       actions.push({ type: "RECOVER", unitId: unit.id });
     }
+    if (!unit.moved && !unit.attacked && !unit.fortified && unit.embarked === null) {
+      actions.push({ type: "FORTIFY", unitId: unit.id });
+    }
     if (hasTech(player, "free_spirit") && !unit.moved && !unit.attacked) {
       actions.push({ type: "DISBAND", unitId: unit.id });
     }

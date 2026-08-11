@@ -1063,7 +1063,13 @@ function spriteFor(opts: DrawCharacterOpts, scale: number, res: number): HTMLCan
   if (typeof document === "undefined") return null;
   const key = `${opts.tribe}|${opts.type}|${opts.veteran ? 1 : 0}|${opts.acted ? 1 : 0}|${scale.toFixed(3)}|${res}`;
   const hit = spriteCache.get(key);
-  if (hit) return hit;
+  if (hit) {
+    // Re-insert so eviction is least-recently-used: plain insertion order can
+    // drop a sprite that is on screen every frame.
+    spriteCache.delete(key);
+    spriteCache.set(key, hit);
+    return hit;
+  }
 
   const box = boxFor(opts.type);
   const px = scale * res;
