@@ -49,7 +49,7 @@ export default function HelpOverlay({ onClose }: { onClose: () => void }) {
               "Harvest fruit, animals, and fish (needs the matching tech) to grow city population.",
               "Whales are the exception: with Whaling they pay stars rather than population.",
               "Farms, mines, lumber huts, and ports grow population faster.",
-              "Ports are the only way to put to sea — with Sailing they launch ships instead of rafts.",
+              "Ports are the only way to put to sea — move a land unit onto a port and it boards a raft (a ship, once you know Sailing).",
               "When population fills the bar, the city levels up and you pick a reward.",
               "Construction and Spiritualism let you simply buy City Walls and Grand Parks instead of waiting to be offered them.",
             ]}

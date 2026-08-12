@@ -10,8 +10,8 @@ import { abilityOf } from "./tribeAbility";
  * reference game's rules:
  *  - forest/mountain end movement on entry; mountains need Climbing
  *  - entering a tile adjacent to a visible enemy unit ends movement
- *  - land units embark from a friendly port; naval units move on water
- *    (ocean needs Navigation) and disembark onto land
+ *  - land units embark by stepping aboard a friendly port; naval units move
+ *    on water (ocean needs Navigation) and disembark onto land
  *  - cannot pass through or stop on any occupied tile
  *  - with Roads, a step between two land tiles of your own territory costs
  *    half and is never stopped by the terrain underneath it
@@ -54,14 +54,13 @@ export function reachableTiles(state: GameState, unit: Unit): Array<[number, num
       if (terr.water) {
         entering = "water";
         if (unit.embarked === null) {
-          // land unit may only step into water by embarking at a friendly port
-          const fromTile = state.tiles[cur];
-          const fromPort =
-            fromTile.building === "port" &&
-            fromTile.cityId !== null &&
-            cityById(state, fromTile.cityId)?.ownerId === unit.ownerId;
-          if (!fromPort) continue;
-          if (tile.terrain === "ocean") continue;
+          // a land unit puts to sea by stepping aboard a friendly port; ports
+          // sit on water, so the boarding step is the entry into water itself
+          const ontoPort =
+            tile.building === "port" &&
+            tile.cityId !== null &&
+            cityById(state, tile.cityId)?.ownerId === unit.ownerId;
+          if (!ontoPort) continue;
         } else {
           if (tile.terrain === "ocean" && !hasTech(player, "navigation")) continue;
         }
