@@ -15,7 +15,16 @@ import { playSound } from "../game/sound";
  * cover any screen from a squarish monitor to an ultrawide and only that
  * margin gets clipped — the logo and the buttons sit far inside it. The crop
  * is anchored to the bottom, which keeps the button bar on the screen edge.
+ *
+ * Nothing can cover a screen far wider than it is tall — a phone in landscape
+ * under a browser's chrome can be past 3:1 — because the scene cannot be
+ * cropped top or bottom without losing the logo or the buttons. There the page
+ * is painted in NIGHT, the exact colour the art's own margin fades to, so the
+ * leftover reads as more night sky instead of as bars.
  */
+
+/** The colour the artwork's sky margin fades to, sampled from the file. */
+const NIGHT = "#0b0b17";
 
 /** Full canvas, including the painted sky margin around the scene. */
 const ART_W = 2040;
@@ -75,14 +84,7 @@ export default function TitleScreen() {
   };
 
   return (
-    <div className="relative h-full w-full overflow-hidden bg-[#081019]">
-      <img
-        src="/title.webp"
-        alt=""
-        aria-hidden
-        className="absolute inset-0 h-full w-full scale-110 object-cover blur-2xl brightness-[0.45]"
-        draggable={false}
-      />
+    <div className="relative h-full w-full overflow-hidden" style={{ background: NIGHT }}>
       <div
         className="absolute bottom-0 left-1/2 -translate-x-1/2 select-none"
         style={{ width: ART_WIDTH_CSS, aspectRatio: `${ART_W} / ${ART_H}` }}

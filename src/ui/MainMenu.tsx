@@ -39,128 +39,133 @@ export default function MainMenu({ onBack }: { onBack?: () => void }) {
   };
 
   return (
-    <div className="flex h-full items-center justify-center overflow-auto bg-gradient-to-b from-[#0b1220] to-[#101f38] p-4">
-      <div className="w-[min(520px,94vw)] rounded-2xl border border-white/10 bg-[#0f1828]/90 p-6 shadow-2xl">
-        {onBack && (
-          <button
-            className="mb-3 rounded-lg bg-white/10 px-3 py-1.5 text-sm font-semibold hover:bg-white/20"
-            onClick={onBack}
-          >
-            ← Title
-          </button>
-        )}
-        <h1 className="text-center text-4xl font-black tracking-tight">
-          Proto<span className="text-sky-400">town</span>
-        </h1>
-        <p className="mb-6 mt-1 text-center text-sm text-white/50">
-          Explore, expand, and conquer — you against the rival tribes.
-        </p>
-
-        <Section label="Your tribe">
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-            {TRIBES.map((t) => (
-              <button
-                key={t.id}
-                onClick={() => setTribeId(t.id)}
-                className={`flex flex-col items-center rounded-lg border p-2 transition ${
-                  tribeId === t.id ? "border-white bg-white/10" : "border-white/10 bg-white/5 hover:bg-white/10"
-                }`}
-              >
-                <UnitPortrait tribeId={t.id} type="warrior" width={78} height={82} />
-                <div className="text-sm font-semibold" style={{ color: t.color }}>
-                  {t.name}
-                </div>
-                <div className="text-[11px] text-white/45">{t.tagline}</div>
-                <div className="mt-1 text-[11px] font-semibold" style={{ color: t.color }}>
-                  {t.ability.name}
-                </div>
-                <div className="text-[10px] leading-tight text-white/55">{t.ability.description}</div>
-                <div className="mt-1.5 flex gap-1">
-                  <Swatch color={t.color} />
-                  <Swatch color={t.colorDark} />
-                </div>
-              </button>
-            ))}
-          </div>
-        </Section>
-
-        <Section label="Opponents">
-          <Choice options={[1, 2, 3]} value={opponents} onPick={setOpponents} render={(n) => `${n} rival${n > 1 ? "s" : ""}`} />
-        </Section>
-
-        <Section label="Difficulty">
-          <Choice
-            options={["relaxed", "normal", "hard"] as Difficulty[]}
-            value={difficulty}
-            onPick={setDifficulty}
-            render={(d) => d.charAt(0).toUpperCase() + d.slice(1)}
-          />
-        </Section>
-
-        <Section label="Victory">
-          <Choice
-            options={["domination", "perfection"] as WinMode[]}
-            value={winMode}
-            onPick={setWinMode}
-            render={(m) => (m === "domination" ? "Domination — last tribe standing" : "Perfection — best score in 30 turns")}
-          />
-        </Section>
-
-        <div className="mt-6 space-y-2">
-          <button
-            className="w-full rounded-xl bg-emerald-600 py-3 text-lg font-bold hover:bg-emerald-500"
-            onClick={start}
-          >
-            New game
-          </button>
-          <button
-            className="w-full rounded-xl border border-amber-400/30 bg-amber-500/15 py-2.5 font-semibold text-amber-200 hover:bg-amber-500/25"
-            onClick={() => game.startNewGame(dailyOptions(), DAILY_DIFFICULTY)}
-          >
-            Daily challenge
-            <span className="block text-xs font-normal text-amber-200/60">
-              {daily
-                ? `Today's best: ${daily.score}${daily.won ? " · won" : ""} — play again`
-                : `Same map for everyone today · ${dailyKey()}`}
-            </span>
-          </button>
-          {onlineEnabled() && (
+    <div className="h-full overflow-y-auto overscroll-contain bg-gradient-to-b from-[#0b1220] to-[#101f38]">
+      {/* min-h-full, not h-full: a panel taller than the screen grows this row
+          instead of overflowing a centred box — which is what put the ends of it
+          out of reach on a short screen. */}
+      <div className="flex min-h-full items-center justify-center p-4">
+        <div className="w-[min(520px,94vw)] rounded-2xl border border-white/10 bg-[#0f1828]/90 p-6 shadow-2xl">
+          {onBack && (
             <button
-              className="w-full rounded-xl border border-sky-400/30 bg-sky-500/15 py-2.5 font-semibold text-sky-200 hover:bg-sky-500/25"
-              onClick={() => setOnlineOpen(true)}
+              className="mb-3 rounded-lg bg-white/10 px-3 py-1.5 text-sm font-semibold hover:bg-white/20"
+              onClick={onBack}
             >
-              Play online
-              <span className="block text-xs font-normal text-sky-200/60">
-                Challenge a friend — take turns whenever, on any device
+              ← Title
+            </button>
+          )}
+          <h1 className="text-center text-4xl font-black tracking-tight">
+            Proto<span className="text-sky-400">town</span>
+          </h1>
+          <p className="mb-6 mt-1 text-center text-sm text-white/50">
+            Explore, expand, and conquer — you against the rival tribes.
+          </p>
+
+          <Section label="Your tribe">
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+              {TRIBES.map((t) => (
+                <button
+                  key={t.id}
+                  onClick={() => setTribeId(t.id)}
+                  className={`flex flex-col items-center rounded-lg border p-2 transition ${
+                    tribeId === t.id ? "border-white bg-white/10" : "border-white/10 bg-white/5 hover:bg-white/10"
+                  }`}
+                >
+                  <UnitPortrait tribeId={t.id} type="warrior" width={78} height={82} />
+                  <div className="text-sm font-semibold" style={{ color: t.color }}>
+                    {t.name}
+                  </div>
+                  <div className="text-[11px] text-white/45">{t.tagline}</div>
+                  <div className="mt-1 text-[11px] font-semibold" style={{ color: t.color }}>
+                    {t.ability.name}
+                  </div>
+                  <div className="text-[10px] leading-tight text-white/55">{t.ability.description}</div>
+                  <div className="mt-1.5 flex gap-1">
+                    <Swatch color={t.color} />
+                    <Swatch color={t.colorDark} />
+                  </div>
+                </button>
+              ))}
+            </div>
+          </Section>
+
+          <Section label="Opponents">
+            <Choice options={[1, 2, 3]} value={opponents} onPick={setOpponents} render={(n) => `${n} rival${n > 1 ? "s" : ""}`} />
+          </Section>
+
+          <Section label="Difficulty">
+            <Choice
+              options={["relaxed", "normal", "hard"] as Difficulty[]}
+              value={difficulty}
+              onPick={setDifficulty}
+              render={(d) => d.charAt(0).toUpperCase() + d.slice(1)}
+            />
+          </Section>
+
+          <Section label="Victory">
+            <Choice
+              options={["domination", "perfection"] as WinMode[]}
+              value={winMode}
+              onPick={setWinMode}
+              render={(m) => (m === "domination" ? "Domination — last tribe standing" : "Perfection — best score in 30 turns")}
+            />
+          </Section>
+
+          <div className="mt-6 space-y-2">
+            <button
+              className="w-full rounded-xl bg-emerald-600 py-3 text-lg font-bold hover:bg-emerald-500"
+              onClick={start}
+            >
+              New game
+            </button>
+            <button
+              className="w-full rounded-xl border border-amber-400/30 bg-amber-500/15 py-2.5 font-semibold text-amber-200 hover:bg-amber-500/25"
+              onClick={() => game.startNewGame(dailyOptions(), DAILY_DIFFICULTY)}
+            >
+              Daily challenge
+              <span className="block text-xs font-normal text-amber-200/60">
+                {daily
+                  ? `Today's best: ${daily.score}${daily.won ? " · won" : ""} — play again`
+                  : `Same map for everyone today · ${dailyKey()}`}
               </span>
             </button>
-          )}
-          {resumeInfo && (
+            {onlineEnabled() && (
+              <button
+                className="w-full rounded-xl border border-sky-400/30 bg-sky-500/15 py-2.5 font-semibold text-sky-200 hover:bg-sky-500/25"
+                onClick={() => setOnlineOpen(true)}
+              >
+                Play online
+                <span className="block text-xs font-normal text-sky-200/60">
+                  Challenge a friend — take turns whenever, on any device
+                </span>
+              </button>
+            )}
+            {resumeInfo && (
+              <button
+                className="w-full rounded-xl bg-white/10 py-2.5 font-semibold hover:bg-white/20"
+                onClick={() => {
+                  if (game.state) game.resumeCurrent();
+                  else game.continueGame();
+                }}
+              >
+                Continue
+                <span className="block text-xs font-normal text-white/50">{resumeInfo}</span>
+              </button>
+            )}
             <button
-              className="w-full rounded-xl bg-white/10 py-2.5 font-semibold hover:bg-white/20"
-              onClick={() => {
-                if (game.state) game.resumeCurrent();
-                else game.continueGame();
-              }}
+              className="w-full rounded-xl bg-white/5 py-2 text-sm font-semibold text-white/70 hover:bg-white/15"
+              onClick={() => setSavesOpen(true)}
             >
-              Continue
-              <span className="block text-xs font-normal text-white/50">{resumeInfo}</span>
+              Saved games
             </button>
-          )}
-          <button
-            className="w-full rounded-xl bg-white/5 py-2 text-sm font-semibold text-white/70 hover:bg-white/15"
-            onClick={() => setSavesOpen(true)}
-          >
-            Saved games
-          </button>
+          </div>
+
+          {savesOpen && <SavesDialog onClose={() => setSavesOpen(false)} />}
+
+          <p className="mt-5 text-center text-xs text-white/35">
+            Tap to move · drag to pan · pinch or scroll to zoom. Capture villages, grow cities, research, and out-fight
+            the AI.
+          </p>
         </div>
-
-        {savesOpen && <SavesDialog onClose={() => setSavesOpen(false)} />}
-
-        <p className="mt-5 text-center text-xs text-white/35">
-          Tap to move · drag to pan · pinch or scroll to zoom. Capture villages, grow cities, research, and out-fight
-          the AI.
-        </p>
       </div>
     </div>
   );
