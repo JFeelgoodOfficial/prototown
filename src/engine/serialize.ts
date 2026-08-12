@@ -1,6 +1,6 @@
 import type { GameState } from "./state";
 
-export const SAVE_VERSION = 3;
+export const SAVE_VERSION = 4;
 
 export interface SaveFile {
   version: number;
@@ -34,6 +34,7 @@ export function serialize(state: GameState, savedAt: number, difficulty: string)
 function normalize(state: GameState): GameState {
   if (!Array.isArray(state.scoreHistory)) state.scoreHistory = [];
   if (state.lastRuinReward === undefined) state.lastRuinReward = null;
+  if (state.nukeLaunched === undefined) state.nukeLaunched = false;
   for (const tile of state.tiles) {
     if (tile.ruin === undefined) tile.ruin = false;
   }

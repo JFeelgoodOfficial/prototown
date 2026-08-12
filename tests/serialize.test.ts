@@ -44,6 +44,15 @@ describe("save / load", () => {
     expect(restored!.difficulty).toBeNull();
   });
 
+  it("loads version 3 saves, which predate the nuke flag", () => {
+    const s = newGame({ seed: 11, size: 11, tribes: ["korvani", "thornwood"], winMode: "domination" });
+    const bare = JSON.parse(JSON.stringify(s));
+    delete bare.nukeLaunched;
+    const restored = deserialize(JSON.stringify({ version: 3, savedAt: 1, difficulty: "normal", state: bare }));
+    expect(restored).not.toBeNull();
+    expect(restored!.state.nukeLaunched).toBe(false);
+  });
+
   it("rejects unknown versions and junk", () => {
     expect(deserialize("not json")).toBeNull();
     expect(deserialize(JSON.stringify({ version: 999, state: {} }))).toBeNull();

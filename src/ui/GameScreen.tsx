@@ -99,7 +99,11 @@ export default function GameScreen() {
         }
 
         const hover = hoverRef.current;
-        const animating = controller.floats.length > 0 || controller.anims.length > 0;
+        const animating =
+          controller.floats.length > 0 ||
+          controller.anims.length > 0 ||
+          controller.missiles.length > 0 ||
+          controller.blasts.length > 0;
         const frameKey = `${controller.getVersion()}|${cam.x.toFixed(2)},${cam.y.toFixed(2)},${cam.zoom.toFixed(4)}|${hover ? `${hover[0]},${hover[1]}` : ""}|${canvas.width}x${canvas.height}|${controller.revealAll}`;
         if (!animating && frameKey === lastFrameKey) {
           raf = requestAnimationFrame(draw);
@@ -114,6 +118,8 @@ export default function GameScreen() {
         const now = performance.now();
         controller.floats = controller.floats.filter((f) => now - f.bornAt < 900);
         controller.anims = controller.anims.filter((a) => now - a.bornAt < a.duration);
+        controller.missiles = controller.missiles.filter((m) => now - m.bornAt < m.duration);
+        controller.blasts = controller.blasts.filter((b) => now - b.bornAt < b.duration);
         const unitOffsets = offsetsFor(controller.anims, now);
 
         const selected = controller.selectedUnitId;
@@ -142,15 +148,29 @@ export default function GameScreen() {
           reachable: derived.moves,
           attackableUnitIds: derived.attackIds,
           hoverTile: hoverRef.current,
-          floatingTexts: controller.floats.map((f) => ({
-            x: f.x,
-            y: f.y,
-            text: f.text,
-            color: f.color,
-            t: (now - f.bornAt) / 900,
-          })),
+          floatingTexts: controller.floats
+            .filter((f) => now >= f.bornAt) // impact texts are born when the missile lands
+            .map((f) => ({
+              x: f.x,
+              y: f.y,
+              text: f.text,
+              color: f.color,
+              t: (now - f.bornAt) / 900,
+            })),
           revealAll: controller.revealAll,
           unitOffsets,
+          missiles: controller.missiles.map((m) => ({
+            fromX: m.fromX,
+            fromY: m.fromY,
+            toX: m.toX,
+            toY: m.toY,
+            t: Math.max(0, Math.min(1, (now - m.bornAt) / m.duration)),
+          })),
+          blasts: controller.blasts.map((b) => ({
+            x: b.x,
+            y: b.y,
+            t: Math.max(0, Math.min(1, (now - b.bornAt) / b.duration)),
+          })),
         };
         render(ctx, s, view);
         ctx.restore();
@@ -514,6 +534,7 @@ function offsetsFor(anims: UnitAnim[], now: number): Map<number, [number, number
   const out = new Map<number, [number, number]>();
   for (const a of anims) {
     const t = Math.min(1, (now - a.bornAt) / a.duration);
+    if (t < 0) continue; // scheduled for a missile impact that hasn't landed yet
     if (a.kind === "move") {
       const [fx, fy] = gridToWorld(a.fromX, a.fromY);
       const [tx, ty] = gridToWorld(a.toX, a.toY);

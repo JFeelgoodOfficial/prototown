@@ -1,6 +1,6 @@
 import type { UnitType } from "../data/units";
 
-export type TerrainType = "field" | "forest" | "mountain" | "water" | "ocean";
+export type TerrainType = "field" | "forest" | "mountain" | "water" | "ocean" | "crater";
 export type ResourceType = "fruit" | "animal" | "fish" | "whale" | "metal" | "crop";
 export type BuildingType = "lumber_hut" | "farm" | "mine" | "port";
 
@@ -91,6 +91,8 @@ export interface GameState {
   lastRuinReward: RuinReward | null;
   /** score per player at the end of each completed turn, oldest first */
   scoreHistory: number[][];
+  /** true once any player has fired the game's single nuke */
+  nukeLaunched: boolean;
 }
 
 export type RuinRewardKind = "stars" | "tech" | "veteran" | "population" | "map";

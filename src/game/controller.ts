@@ -1,5 +1,5 @@
 import type { GameState } from "../engine/state";
-import { unitById, playerById, unitsOf } from "../engine/state";
+import { unitById, cityById, playerById, unitsOf } from "../engine/state";
 import type { Action } from "../engine/actions";
 import { applyAction } from "../engine/reducer";
 import { computeLegalActions } from "../engine/legalActions";
@@ -44,8 +44,28 @@ export interface UnitAnim {
   duration: number;
 }
 
+/** A missile climbing off its launcher, cruising, then dropping on the target tile. */
+export interface MissileAnim {
+  fromX: number;
+  fromY: number;
+  toX: number;
+  toY: number;
+  bornAt: number;
+  duration: number;
+}
+
+/** The nuke going off over a tile: flash, shockwave, mushroom cloud. */
+export interface BlastAnim {
+  x: number;
+  y: number;
+  bornAt: number;
+  duration: number;
+}
+
 export const MOVE_ANIM_MS = 180;
 export const HIT_ANIM_MS = 260;
+export const MISSILE_ANIM_MS = 900;
+export const NUKE_ANIM_MS = 1600;
 
 const AI_STEP_MS = 140;
 const AI_ACTION_CAP = 250;
@@ -66,6 +86,8 @@ export class GameController {
   legal: Action[] = [];
   floats: FloatEffect[] = [];
   anims: UnitAnim[] = [];
+  missiles: MissileAnim[] = [];
+  blasts: BlastAnim[] = [];
   /** Tile the view should jump to, consumed by the map once applied. */
   focusRequest: [number, number] | null = null;
   aiBusy = false;
@@ -101,6 +123,8 @@ export class GameController {
     this.selectedTile = null;
     this.floats = [];
     this.anims = [];
+    this.missiles = [];
+    this.blasts = [];
     this.refreshLegal();
     this.persist();
     this.notify();
@@ -121,6 +145,8 @@ export class GameController {
     this.selectedTile = null;
     this.floats = [];
     this.anims = [];
+    this.missiles = [];
+    this.blasts = [];
     this.refreshLegal();
     this.notify();
     this.maybePumpOnline();
@@ -160,6 +186,8 @@ export class GameController {
     this.selectedTile = null;
     this.floats = [];
     this.anims = [];
+    this.missiles = [];
+    this.blasts = [];
     this.refreshLegal();
     this.screen = state.winnerId !== null ? "gameover" : "game";
     this.notify();
@@ -282,6 +310,8 @@ export class GameController {
     this.difficulty = loaded.difficulty;
     this.floats = [];
     this.anims = [];
+    this.missiles = [];
+    this.blasts = [];
     this.selectedUnitId = null;
     this.selectedTile = null;
     this.spawnAgents();
@@ -354,22 +384,44 @@ export class GameController {
       const next = applyAction(this.state, action);
       const targetAfter = unitById(next, action.targetId);
       const attackerAfter = unitById(next, action.unitId);
+      // a missile launcher's shot flies visibly; hold the impact feedback
+      // until the warhead comes down
+      const arced = attacker?.type === "missile" && attacker.embarked === null && target;
+      const impactAt = arced ? performance.now() + MISSILE_ANIM_MS : performance.now();
+      if (arced && target && attacker) {
+        this.missiles.push({
+          fromX: attacker.x,
+          fromY: attacker.y,
+          toX: target.x,
+          toY: target.y,
+          bornAt: performance.now(),
+          duration: MISSILE_ANIM_MS,
+        });
+      }
       if (target) {
         const dmg = target.hp - (targetAfter?.hp ?? 0);
-        this.addFloat(target.x, target.y, targetAfter ? `-${dmg}` : "☠", "#ff6655");
-        if (targetAfter) this.addHit(target.id, target.x, target.y);
+        this.addFloat(target.x, target.y, targetAfter ? `-${dmg}` : "☠", "#ff6655", impactAt);
+        if (targetAfter) this.addHit(target.id, target.x, target.y, impactAt);
       }
       if (attacker && attacker.hp !== (attackerAfter?.hp ?? attacker.hp)) {
         const dmg = attacker.hp - (attackerAfter?.hp ?? 0);
-        this.addFloat(attacker.x, attacker.y, attackerAfter ? `-${dmg}` : "☠", "#ffaa44");
-        if (attackerAfter) this.addHit(attacker.id, attacker.x, attacker.y);
+        this.addFloat(attacker.x, attacker.y, attackerAfter ? `-${dmg}` : "☠", "#ffaa44", impactAt);
+        if (attackerAfter) this.addHit(attacker.id, attacker.x, attacker.y, impactAt);
       }
       // a melee attacker steps into the tile it just cleared
       if (attacker && attackerAfter && !targetAfter && (attackerAfter.x !== attacker.x || attackerAfter.y !== attacker.y)) {
         this.addMove(attacker.id, attacker.x, attacker.y, attackerAfter.x, attackerAfter.y);
       }
-      playSound(targetAfter ? "attack" : "kill");
+      playSound(arced ? "missile" : targetAfter ? "attack" : "kill");
       this.state = next;
+    } else if (action.type === "LAUNCH_NUKE") {
+      const city = cityById(this.state, action.cityId);
+      this.state = applyAction(this.state, action);
+      if (city) {
+        this.blasts.push({ x: city.x, y: city.y, bornAt: performance.now(), duration: NUKE_ANIM_MS });
+        this.addFloat(city.x, city.y, `☢ ${city.name} destroyed`, "#ffd75e", performance.now() + NUKE_ANIM_MS * 0.35);
+      }
+      playSound("nuke");
     } else if (action.type === "RECOVER") {
       const unit = unitById(this.state, action.unitId);
       const next = applyAction(this.state, action);
@@ -400,9 +452,9 @@ export class GameController {
     this.anims.push({ unitId, kind: "move", fromX, fromY, toX, toY, bornAt: performance.now(), duration: MOVE_ANIM_MS });
   }
 
-  private addHit(unitId: number, x: number, y: number): void {
+  private addHit(unitId: number, x: number, y: number, bornAt = performance.now()): void {
     this.anims = this.anims.filter((a) => a.unitId !== unitId);
-    this.anims.push({ unitId, kind: "hit", fromX: x, fromY: y, toX: x, toY: y, bornAt: performance.now(), duration: HIT_ANIM_MS });
+    this.anims.push({ unitId, kind: "hit", fromX: x, fromY: y, toX: x, toY: y, bornAt, duration: HIT_ANIM_MS });
   }
 
   /** Own units that can still do something this turn. */
@@ -428,8 +480,8 @@ export class GameController {
     this.notify();
   }
 
-  private addFloat(x: number, y: number, text: string, color: string): void {
-    this.floats.push({ x, y, text, color, bornAt: performance.now() });
+  private addFloat(x: number, y: number, text: string, color: string, bornAt = performance.now()): void {
+    this.floats.push({ x, y, text, color, bornAt });
     if (this.floats.length > 40) this.floats.splice(0, this.floats.length - 40);
   }
 
@@ -520,6 +572,10 @@ export class GameController {
       case "RECOVER": {
         const u = unitById(this.state, action.unitId);
         return u ? seen(u.x, u.y) : false;
+      }
+      case "LAUNCH_NUKE": {
+        const c = cityById(this.state, action.cityId);
+        return c ? seen(c.x, c.y) : false;
       }
       default:
         return false;

@@ -882,6 +882,52 @@ const BUILD: Record<ArtUnitType, (ctx: Ctx, k: TribeKit) => void> = {
     k.accent(ctx, 58, -92);
   },
 
+  missile(ctx, k) {
+    groundShadow(ctx, 48, 14);
+    // chassis
+    wood(ctx, [[-40, -14], [40, -14], [36, -25], [-36, -25]]);
+    ([[-26, -22], [30, -22]] as Pt[]).forEach((p) => plate(ctx, [[p[0] - 5, p[1] - 3], [p[0] + 5, p[1] - 3], [p[0] + 5, p[1] + 2], [p[0] - 5, p[1] + 2]], MAT.iron, { hi: MAT.ironHi, spec: true }));
+    // rear support strut holding the rail's elevation
+    wood(ctx, [[8, -24], [16, -24], [30, -52], [23, -55]]);
+    // launch rail angled skyward, missile riding it
+    ctx.save();
+    ctx.translate(-14, -26);
+    ctx.rotate(-0.9);
+    wood(ctx, [[-8, 10], [74, 10], [74, 4], [-8, 4]]);
+    plate(ctx, [[-6, 4], [78, 4], [78, 0], [-6, 0]], MAT.iron, { hi: MAT.ironHi, spec: true });
+    // missile body
+    plate(ctx, [[2, -3], [58, -3], [58, -15], [2, -15]], MAT.steel, { hi: MAT.steelHi, lo: MAT.steelLo, spec: true, specA: 0.7 });
+    // tail fins
+    plate(ctx, [[2, -3], [-8, 7], [12, -3]], k.metal, { hi: k.metalHi, spec: true });
+    plate(ctx, [[2, -15], [-8, -25], [12, -15]], k.metal, { hi: k.metalHi, spec: true });
+    // nose cone, styled per weapon family like the catapult's payload
+    if (k.weapon === "notched") { plate(ctx, [[58, -3], [76, -9], [58, -15]], "#4e4340", { hi: "#8b7a6e" }); orb(ctx, 61, -9, 3.4, 3.4, "#ff9a3c", { rim: false }); }
+    else if (k.weapon === "hook") { plate(ctx, [[58, -3], [76, -9], [58, -15]], "#3d6b7f", { hi: "#9fd3e4" }); spec(ctx, 62, -12, 3, 3, 0, 0.8); }
+    else if (k.weapon === "straight") { plate(ctx, [[58, -3], [76, -9], [58, -15]], k.metal, { hi: k.metalHi, lo: dk(k.metal, 0.6) }); spec(ctx, 62, -12, 3.4, 3, 0, 0.8); }
+    else { plate(ctx, [[58, -3], [76, -9], [58, -15]], "#6f7a63", { hi: "#adbaa0" }); for (let i = 0; i < 3; i++) stroke(ctx, [[60 + i * 5, -3], [60 + i * 5, -15]], k.trim, 1.6); }
+    // band with the tribe's trim around the body
+    plate(ctx, [[34, -3], [39, -3], [39, -15], [34, -15]], k.trim, { rimA: 0.35 });
+    ctx.restore();
+    // banner mast
+    wood(ctx, [[28, -24], [32, -24], [32, -74], [28, -74]]);
+    cloth(ctx, [[32, -74], [56, -66], [32, -52]], k.armor, 3);
+    ctx.save(); ctx.translate(40, -64); ctx.scale(0.8, 0.8); k.crest(ctx, k.trim); ctx.restore();
+    // wheels
+    ([[-26, -12], [26, -12]] as Pt[]).forEach((p) => {
+      orb(ctx, p[0], p[1], 13, 13, MAT.wood, { hi: MAT.woodHi, lo: MAT.woodLo });
+      for (let i = 0; i < 6; i++) { const a = (i / 6) * Math.PI; stroke(ctx, [[p[0] - Math.cos(a) * 11, p[1] - Math.sin(a) * 11], [p[0] + Math.cos(a) * 11, p[1] + Math.sin(a) * 11]], "rgba(60,40,22,0.5)", 1.8); }
+      orb(ctx, p[0], p[1], 3.6, 3.6, MAT.iron, { hi: MAT.ironHi });
+    });
+    // crew
+    ctx.save();
+    ctx.translate(-52, 0); ctx.scale(0.72, 0.72);
+    const b = body(ctx, k, { bulk: 0.92 });
+    arm(ctx, k, [b.shW + 1, -b.sh + 4], [18, -52], [17, -64], b.bulk, {});
+    arm(ctx, k, [-b.shW - 1, -b.sh + 4], [-16, -54], [-16, -66], b.bulk, {});
+    ctx.restore();
+    k.accent(ctx, 58, -96);
+  },
+
   giant(ctx, k) {
     groundShadow(ctx, 52, 16);
     ctx.save();
@@ -976,7 +1022,7 @@ function water(ctx: Ctx): void {
 /** Crown heights per type, used to place the veteran star and HP bar. */
 export const TOPS: Record<ArtUnitType, number> = {
   warrior: -138, defender: -138, swordsman: -142, archer: -134,
-  rider: -124, knight: -132, catapult: -132, giant: -200, raft: -122, ship: -114,
+  rider: -124, knight: -132, catapult: -132, missile: -140, giant: -200, raft: -122, ship: -114,
 };
 
 /** Figures are authored 100 units tall; this fits them to the tile scale. */
@@ -985,7 +1031,7 @@ export const FIT = 0.55;
 /** Rough authored half-widths (weapon tips and accents included), for previews. */
 const HALF_WIDTHS: Record<ArtUnitType, number> = {
   warrior: 42, defender: 56, swordsman: 42, archer: 56,
-  rider: 52, knight: 70, catapult: 76, giant: 72, raft: 68, ship: 78,
+  rider: 52, knight: 70, catapult: 76, missile: 76, giant: 72, raft: 68, ship: 78,
 };
 
 /** Largest scale that keeps a figure of this type inside a w x h box. */

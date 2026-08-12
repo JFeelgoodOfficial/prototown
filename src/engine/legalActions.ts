@@ -135,6 +135,15 @@ export function computeLegalActions(state: GameState, playerId: number): Action[
     actions.push({ type: "RESEARCH", techId: tech.id });
   }
 
+  // The game's single nuke: any enemy city in live sight, until someone fires it.
+  if (!state.nukeLaunched && hasTech(player, "atomic_theory")) {
+    for (const city of state.cities) {
+      if (city.ownerId === playerId) continue;
+      if (!watched[idx(state, city.x, city.y)]) continue;
+      actions.push({ type: "LAUNCH_NUKE", cityId: city.id });
+    }
+  }
+
   actions.push({ type: "END_TURN" });
   return actions;
 }

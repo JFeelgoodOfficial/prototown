@@ -123,6 +123,7 @@ export function newGame(opts: NewGameOptions): GameState {
     winnerId: null,
     lastRuinReward: null,
     scoreHistory: [],
+    nukeLaunched: false,
   };
 
   // Capitals: force a playable pocket of land around each

@@ -11,12 +11,15 @@ export interface TerrainDef {
   /** grants the 1.5x defence bonus once the matching tech is known */
   defenceTech: string | null;
   water: boolean;
+  /** nothing may ever enter this tile, no tech waives it */
+  impassable: boolean;
 }
 
 export const TERRAIN: Record<TerrainType, TerrainDef> = {
-  field: { name: "Field", moveCost: 1, stopsMovement: false, requiresTech: null, defenceTech: null, water: false },
-  forest: { name: "Forest", moveCost: 1, stopsMovement: true, requiresTech: null, defenceTech: "archery", water: false },
-  mountain: { name: "Mountain", moveCost: 1, stopsMovement: true, requiresTech: "climbing", defenceTech: "meditation", water: false },
-  water: { name: "Water", moveCost: 1, stopsMovement: false, requiresTech: null, defenceTech: "aquatism", water: true },
-  ocean: { name: "Ocean", moveCost: 1, stopsMovement: false, requiresTech: null, defenceTech: "aquatism", water: true },
+  field: { name: "Field", moveCost: 1, stopsMovement: false, requiresTech: null, defenceTech: null, water: false, impassable: false },
+  forest: { name: "Forest", moveCost: 1, stopsMovement: true, requiresTech: null, defenceTech: "archery", water: false, impassable: false },
+  mountain: { name: "Mountain", moveCost: 1, stopsMovement: true, requiresTech: "climbing", defenceTech: "meditation", water: false, impassable: false },
+  water: { name: "Water", moveCost: 1, stopsMovement: false, requiresTech: null, defenceTech: "aquatism", water: true, impassable: false },
+  ocean: { name: "Ocean", moveCost: 1, stopsMovement: false, requiresTech: null, defenceTech: "aquatism", water: true, impassable: false },
+  crater: { name: "Crater", moveCost: 1, stopsMovement: true, requiresTech: null, defenceTech: null, water: false, impassable: true },
 };

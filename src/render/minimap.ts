@@ -10,6 +10,7 @@ const TERRAIN_DOT: Record<string, string> = {
   mountain: "#8a857c",
   water: "#2f6f92",
   ocean: "#1f4d69",
+  crater: "#37302b",
 };
 
 const UNSEEN = "#161f30";

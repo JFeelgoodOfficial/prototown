@@ -73,6 +73,7 @@ function branchOf(id: string): string {
     climbing: "climbing", mining: "climbing", meditation: "climbing", smithery: "climbing", philosophy: "climbing",
     fishing: "fishing", sailing: "fishing", whaling: "fishing", navigation: "fishing", aquatism: "fishing",
     hunting: "hunting", archery: "hunting", forestry: "hunting", mathematics: "hunting", spiritualism: "hunting",
+    rocketry: "hunting", atomic_theory: "hunting",
   };
   return roots[id];
 }

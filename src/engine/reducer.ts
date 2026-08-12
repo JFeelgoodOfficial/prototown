@@ -243,6 +243,40 @@ export function applyAction(prev: GameState, action: Action): GameState {
       break;
     }
 
+    case "LAUNCH_NUKE": {
+      const target = cityById(state, action.cityId)!;
+      state.nukeLaunched = true;
+
+      // The blast is the city tile plus its 8 neighbours. Any city caught in
+      // it dies with the target, or its orphaned husk would keep rendering.
+      const blast: Array<[number, number]> = [[target.x, target.y], ...neighbors(state, target.x, target.y)];
+      const deadCityIds = new Set<number>();
+      for (const [x, y] of blast) {
+        const tile = tileAt(state, x, y);
+        if (tile.cityHere !== null) deadCityIds.add(tile.cityHere);
+        tile.terrain = "crater";
+        tile.resource = null;
+        tile.building = null;
+        tile.village = false;
+        tile.ruin = false;
+        tile.cityHere = null;
+        tile.cityId = null;
+      }
+
+      state.units = state.units.filter((u) => dist(u.x, u.y, target.x, target.y) > 1);
+      state.cities = state.cities.filter((c) => !deadCityIds.has(c.id));
+      for (const tile of state.tiles) {
+        if (tile.cityId !== null && deadCityIds.has(tile.cityId)) tile.cityId = null;
+      }
+      for (const u of state.units) {
+        if (u.homeCityId !== null && deadCityIds.has(u.homeCityId)) u.homeCityId = null;
+      }
+
+      computeVisibility(state, player);
+      updateWinState(state);
+      break;
+    }
+
     case "CHOOSE_REWARD": {
       const city = cityById(state, action.cityId)!;
       city.pendingReward = null;
@@ -412,7 +446,7 @@ function findSpawnSpot(state: GameState, city: City): [number, number] | null {
   if (!occupied(city.x, city.y)) return [city.x, city.y];
   for (const [nx, ny] of neighbors(state, city.x, city.y)) {
     const terr = TERRAIN[tileAt(state, nx, ny).terrain];
-    if (!terr.water && !occupied(nx, ny)) return [nx, ny];
+    if (!terr.water && !terr.impassable && !occupied(nx, ny)) return [nx, ny];
   }
   return null;
 }

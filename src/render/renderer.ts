@@ -32,6 +32,22 @@ export interface FloatingText {
   t: number;
 }
 
+/** A missile in flight from one tile to another; t is 0..1 flight progress. */
+export interface MissileFx {
+  fromX: number;
+  fromY: number;
+  toX: number;
+  toY: number;
+  t: number;
+}
+
+/** A nuclear blast over a tile; t is 0..1 through the whole effect. */
+export interface BlastFx {
+  x: number;
+  y: number;
+  t: number;
+}
+
 export interface ViewOptions {
   camera: Camera;
   width: number;
@@ -48,6 +64,8 @@ export interface ViewOptions {
   revealAll: boolean;
   /** world-space offsets per unit id, for move slides and hit flinches */
   unitOffsets?: Map<number, [number, number]>;
+  missiles?: MissileFx[];
+  blasts?: BlastFx[];
 }
 
 /** Fits the 100-unit-tall authored figures onto a 72x36 iso tile. */
@@ -156,6 +174,11 @@ export function render(ctx: CanvasRenderingContext2D, state: GameState, view: Vi
     );
   }
 
+  // Pass 2b: missiles in flight, above the units they fly over
+  for (const m of view.missiles ?? []) {
+    drawMissileFx(ctx, m, gridToWorld(m.fromX, m.fromY)[0], topOf(m.fromX, m.fromY), gridToWorld(m.toX, m.toY)[0], topOf(m.toX, m.toY));
+  }
+
   // Pass 3: city nameplates on top of everything (tiles drawn later would cover them)
   for (const city of state.cities) {
     const i = idx(state, city.x, city.y);
@@ -175,6 +198,190 @@ export function render(ctx: CanvasRenderingContext2D, state: GameState, view: Vi
     ctx.globalAlpha = 1 - ft.t;
     ctx.fillText(ft.text, wx, wy - TILE_H - 14 - ft.t * 22);
     ctx.globalAlpha = 1;
+  }
+
+  // Pass 5: nuke blasts overdraw everything
+  for (const b of view.blasts ?? []) {
+    drawBlastFx(ctx, b, gridToWorld(b.x, b.y)[0], topOf(b.x, b.y));
+  }
+
+  ctx.restore();
+}
+
+/** How high a missile cruises above the tile tops, in world pixels. */
+const MISSILE_APEX = 240;
+
+/** Straight up off the launcher, a level cruise, then straight down on the target. */
+function drawMissileFx(
+  ctx: CanvasRenderingContext2D,
+  m: MissileFx,
+  fx: number,
+  fy: number,
+  tx: number,
+  ty: number,
+): void {
+  const t = m.t;
+  let x: number;
+  let y: number;
+  let angle: number; // direction of travel
+  if (t < 0.35) {
+    const k = t / 0.35;
+    const eased = 1 - (1 - k) * (1 - k); // launch kick, then settling climb
+    x = fx;
+    y = fy - MISSILE_APEX * eased;
+    angle = -Math.PI / 2;
+  } else if (t < 0.65) {
+    const k = (t - 0.35) / 0.3;
+    x = fx + (tx - fx) * k;
+    y = fy + (ty - fy) * k - MISSILE_APEX;
+    angle = Math.atan2(ty - fy, tx - fx);
+  } else {
+    const k = (t - 0.65) / 0.35;
+    x = tx;
+    y = ty - MISSILE_APEX + MISSILE_APEX * k * k; // gravity takes it
+    angle = Math.PI / 2;
+  }
+
+  // exhaust / falling smoke behind the capsule
+  const burning = t < 0.65;
+  for (let i = 1; i <= 3; i++) {
+    const back = i * 9;
+    const px = x - Math.cos(angle) * back;
+    const py = y - Math.sin(angle) * back;
+    ctx.beginPath();
+    ctx.arc(px, py, 3.4 - i * 0.7, 0, Math.PI * 2);
+    ctx.fillStyle = burning
+      ? `rgba(255,${200 - i * 40},80,${0.5 - i * 0.13})`
+      : `rgba(180,180,180,${0.4 - i * 0.11})`;
+    ctx.fill();
+  }
+
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(angle + Math.PI / 2); // capsule is authored nose-up
+  // body
+  roundRect(ctx, -3.2, -9, 6.4, 14, 3);
+  ctx.fillStyle = "#c7d0da";
+  ctx.fill();
+  ctx.strokeStyle = "#3f4753";
+  ctx.lineWidth = 1;
+  ctx.stroke();
+  // nose
+  ctx.beginPath();
+  ctx.moveTo(-3.2, -8);
+  ctx.lineTo(0, -14);
+  ctx.lineTo(3.2, -8);
+  ctx.closePath();
+  ctx.fillStyle = "#e05a3a";
+  ctx.fill();
+  // fins
+  ctx.beginPath();
+  ctx.moveTo(-3.2, 5);
+  ctx.lineTo(-7, 9);
+  ctx.lineTo(-3.2, 1);
+  ctx.moveTo(3.2, 5);
+  ctx.lineTo(7, 9);
+  ctx.lineTo(3.2, 1);
+  ctx.fillStyle = "#8a94a2";
+  ctx.fill();
+  // engine flame while the motor burns
+  if (burning) {
+    ctx.beginPath();
+    ctx.moveTo(-2.4, 5);
+    ctx.quadraticCurveTo(0, 14 + Math.sin(t * 90) * 3, 2.4, 5);
+    ctx.closePath();
+    ctx.fillStyle = "rgba(255,190,70,0.9)";
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
+/** Flash, ground shockwave, then a mushroom column that rises and greys out. */
+function drawBlastFx(ctx: CanvasRenderingContext2D, b: BlastFx, wx: number, wy: number): void {
+  const t = b.t;
+  const fade = t > 0.8 ? 1 - (t - 0.8) / 0.2 : 1; // whole effect eases out at the end
+  ctx.save();
+  ctx.globalAlpha = fade;
+
+  // white flash swallowing the blast area
+  if (t < 0.2) {
+    const k = t / 0.2;
+    const r = TILE_W * (0.6 + 2.6 * k);
+    const g = ctx.createRadialGradient(wx, wy, 0, wx, wy, r);
+    g.addColorStop(0, `rgba(255,255,240,${0.95 * (1 - k * 0.6)})`);
+    g.addColorStop(0.6, `rgba(255,240,180,${0.7 * (1 - k)})`);
+    g.addColorStop(1, "rgba(255,220,140,0)");
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.ellipse(wx, wy, r, r * 0.7, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // ground shockwave running out through the 3x3 and beyond
+  if (t >= 0.05 && t < 0.55) {
+    const k = (t - 0.05) / 0.5;
+    const r = TILE_W * (0.4 + 3.4 * k);
+    ctx.beginPath();
+    ctx.ellipse(wx, wy, r, r * (TILE_H / TILE_W), 0, 0, Math.PI * 2);
+    ctx.strokeStyle = `rgba(255,236,190,${0.85 * (1 - k)})`;
+    ctx.lineWidth = 5 * (1 - k) + 1;
+    ctx.stroke();
+  }
+
+  // mushroom: stem climbing, cap swelling, fire cooling into ash grey
+  if (t >= 0.12) {
+    const k = Math.min(1, (t - 0.12) / 0.7);
+    const rise = 150 * k;
+    const heat = Math.max(0, 1 - k * 1.4); // orange -> grey
+    const mixc = (hot: number[], cold: number[], a: number) =>
+      `rgba(${hot.map((h, i) => Math.round(h + (cold[i] - h) * (1 - heat))).join(",")},${a})`;
+    const fire = [255, 150, 60];
+    const ash = [120, 112, 104];
+
+    // stem
+    const stemW = 16 + 10 * k;
+    const g = ctx.createLinearGradient(wx, wy, wx, wy - rise);
+    g.addColorStop(0, mixc(fire, ash, 0.75));
+    g.addColorStop(1, mixc([255, 200, 120], [150, 142, 132], 0.85));
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.moveTo(wx - stemW / 2, wy);
+    ctx.quadraticCurveTo(wx - stemW * 0.3, wy - rise * 0.5, wx - stemW * 0.55, wy - rise);
+    ctx.lineTo(wx + stemW * 0.55, wy - rise);
+    ctx.quadraticCurveTo(wx + stemW * 0.3, wy - rise * 0.5, wx + stemW / 2, wy);
+    ctx.closePath();
+    ctx.fill();
+
+    // cap: a cluster of billowing orbs
+    const capY = wy - rise;
+    const capR = 20 + 26 * k;
+    const puffs: Array<[number, number, number]> = [
+      [0, -6, 1],
+      [-0.75, 2, 0.72],
+      [0.75, 2, 0.72],
+      [-0.4, -8, 0.6],
+      [0.4, -8, 0.6],
+    ];
+    for (const [ox, oy, s] of puffs) {
+      const px = wx + ox * capR;
+      const py = capY + oy * 0.4 * s;
+      const pr = capR * s;
+      const rg = ctx.createRadialGradient(px - pr * 0.3, py - pr * 0.4, pr * 0.1, px, py, pr);
+      rg.addColorStop(0, mixc([255, 220, 150], [168, 160, 150], 0.95));
+      rg.addColorStop(0.7, mixc(fire, ash, 0.85));
+      rg.addColorStop(1, mixc([180, 90, 40], [90, 84, 78], 0.5));
+      ctx.fillStyle = rg;
+      ctx.beginPath();
+      ctx.ellipse(px, py, pr, pr * 0.8, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // base ring of dust hugging the ground
+    ctx.beginPath();
+    ctx.ellipse(wx, wy + 2, TILE_W * (0.7 + 0.5 * k), TILE_H * (0.6 + 0.4 * k), 0, 0, Math.PI * 2);
+    ctx.strokeStyle = mixc([220, 170, 110], [110, 104, 98], 0.4 * (1 - k * 0.5));
+    ctx.lineWidth = 8 * (1 - k * 0.4);
+    ctx.stroke();
   }
 
   ctx.restore();
