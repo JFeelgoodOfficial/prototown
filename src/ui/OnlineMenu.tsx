@@ -211,12 +211,17 @@ function ShareLink({ label, link, highlight }: { label: string; link: string; hi
 
 function Frame({ children, onBack }: { children: React.ReactNode; onBack: () => void }) {
   return (
-    <div className="flex h-full items-center justify-center overflow-auto bg-gradient-to-b from-[#0b1220] to-[#101f38] p-4">
-      <div className="my-auto w-[min(520px,94vw)] rounded-2xl border border-white/10 bg-[#0f1828]/90 p-6 shadow-2xl">
-        <button className="mb-3 rounded-lg bg-white/10 px-3 py-1.5 text-sm font-semibold hover:bg-white/20" onClick={onBack}>
-          ← Back
-        </button>
-        {children}
+    <div className="h-full overflow-y-auto overscroll-contain bg-gradient-to-b from-[#0b1220] to-[#101f38]">
+      {/* min-h-full, not h-full: a panel taller than the screen grows this row
+          instead of overflowing a centred box — which is what put the ends of it
+          out of reach on a short screen. */}
+      <div className="flex min-h-full items-center justify-center p-4">
+        <div className="my-auto w-[min(520px,94vw)] rounded-2xl border border-white/10 bg-[#0f1828]/90 p-6 shadow-2xl">
+          <button className="mb-3 rounded-lg bg-white/10 px-3 py-1.5 text-sm font-semibold hover:bg-white/20" onClick={onBack}>
+            ← Back
+          </button>
+          {children}
+        </div>
       </div>
     </div>
   );
