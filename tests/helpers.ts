@@ -25,6 +25,7 @@ export function makeTestState(size = 8): GameState {
     winnerId: null,
     lastRuinReward: null,
     scoreHistory: [],
+    nukeLaunched: false,
   };
 
   // Korvani (boat speed) and Thornwood (climbing) are the two tribes whose

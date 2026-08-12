@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useGame } from "./store";
 import { unitById, tileAt, cityById, unitAt, type GameState } from "../engine/state";
 import { UNITS, NAVAL, type UnitType } from "../data/units";
@@ -98,6 +99,22 @@ export default function SidePanel() {
       );
     }
 
+    if (city && city.ownerId !== game.localSeat) {
+      const nuke = game.legal.find((a) => a.type === "LAUNCH_NUKE" && a.cityId === city.id);
+      if (nuke) {
+        return (
+          <Panel title={`${city.name}${city.isCapital ? " (capital)" : ""} — level ${city.level}`}>
+            <div className="text-xs text-white/60">
+              Enemy city. The nuke levels it and the eight tiles around it — forever. Only one will ever fly.
+            </div>
+            <div className="mt-2">
+              <NukeButton action={nuke} cityName={city.name} />
+            </div>
+          </Panel>
+        );
+      }
+    }
+
     if (tile.ruin) {
       return (
         <Panel title="Ancient ruin">
@@ -152,6 +169,30 @@ function ActionButton({ action }: { action: Action }) {
   );
 }
 
+/** Launching the one nuke is irreversible, so the button asks twice. */
+function NukeButton({ action, cityName }: { action: Action; cityName: string }) {
+  const game = useGame();
+  const [armed, setArmed] = useState(false);
+  if (!armed) {
+    return (
+      <button
+        className="rounded bg-amber-600 px-3 py-1.5 text-sm font-semibold hover:bg-amber-500"
+        onClick={() => setArmed(true)}
+      >
+        ☢ Launch Nuke
+      </button>
+    );
+  }
+  return (
+    <button
+      className="animate-pulse rounded bg-red-600 px-3 py-1.5 text-sm font-bold hover:bg-red-500"
+      onClick={() => game.dispatch(action)}
+    >
+      Confirm: destroy {cityName}?
+    </button>
+  );
+}
+
 function labelFor(a: Action, s: GameState): string {
   switch (a.type) {
     case "CAPTURE":
@@ -180,6 +221,8 @@ function labelFor(a: Action, s: GameState): string {
     }
     case "TRAIN":
       return `${UNITS[a.unitType as UnitType].name} (⭐${UNITS[a.unitType as UnitType].cost})`;
+    case "LAUNCH_NUKE":
+      return "☢ Launch Nuke";
     default:
       return a.type;
   }

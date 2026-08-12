@@ -137,6 +137,7 @@ export function terrainOpenTo(state: GameState, playerId: number): (terrain: str
   const climbs = abilityOf(state, playerId).freeClimbing;
   return (terrain: string) => {
     const terr = TERRAIN[terrain as keyof typeof TERRAIN];
+    if (terr.impassable) return false;
     if (!terr.requiresTech) return true;
     if (climbs && terr.requiresTech === "climbing") return true;
     return hasTech(player, terr.requiresTech);

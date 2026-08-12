@@ -2,7 +2,7 @@
  * Tiny synthesised sound bank. Every effect is generated with oscillators at
  * play time, so the game ships no audio files and the bundle cost is zero.
  */
-export type SoundName = "move" | "attack" | "kill" | "capture" | "levelUp" | "select" | "endTurn" | "defeat";
+export type SoundName = "move" | "attack" | "kill" | "capture" | "levelUp" | "select" | "endTurn" | "defeat" | "missile" | "nuke";
 
 const MUTE_KEY = "polyforge-muted";
 
@@ -81,6 +81,17 @@ const BANK: Record<SoundName, Tone[]> = {
   defeat: [
     { from: 300, to: 120, duration: 0.5, type: "sine", gain: 0.08 },
     { from: 150, to: 60, duration: 0.6, type: "triangle", gain: 0.06, delay: 0.12 },
+  ],
+  // whoosh up, a falling whistle, then the boom timed to MISSILE_ANIM_MS impact
+  missile: [
+    { from: 140, to: 620, duration: 0.3, type: "sawtooth", gain: 0.05 },
+    { from: 1400, to: 320, duration: 0.4, type: "sine", gain: 0.045, delay: 0.45 },
+    { from: 160, to: 45, duration: 0.28, type: "square", gain: 0.09, delay: 0.85 },
+  ],
+  nuke: [
+    { from: 70, to: 28, duration: 1.2, type: "sine", gain: 0.11 },
+    { from: 200, to: 40, duration: 1.0, type: "sawtooth", gain: 0.07, delay: 0.05 },
+    { from: 55, to: 30, duration: 1.3, type: "triangle", gain: 0.08, delay: 0.3 },
   ],
 };
 

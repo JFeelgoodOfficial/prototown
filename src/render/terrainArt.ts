@@ -22,6 +22,7 @@ import {
   mix,
   lt,
   dk,
+  alpha,
   limb,
   plate,
   orb,
@@ -59,6 +60,7 @@ const TERRAIN_MAT: Record<TerrainType, TerrainMat> = {
   mountain: { base: "#9d9a92", hi: "#c6c2b8", lo: "#5f5b53", wall: "#736c62", wallLo: "#38342e", lift: 11, jitter: 6 },
   water: { base: "#3f9ac4", hi: "#8fd6ef", lo: "#1e6690", wall: "#1a4c6d", wallLo: "#0e2f45", lift: 2, jitter: 0 },
   ocean: { base: "#22688f", hi: "#5aa8c8", lo: "#0e3d5c", wall: "#0d3350", wallLo: "#071f31", lift: 0, jitter: 0 },
+  crater: { base: "#4a423c", hi: "#6b6058", lo: "#241f1b", wall: "#3a322c", wallLo: "#1a1512", lift: 5, jitter: 2 },
 };
 
 /** How far the rock crust hangs below a tile top — deeper than any step on the board. */
@@ -438,10 +440,87 @@ export function drawTile(ctx: Ctx, terrain: TerrainType, variant: number, waterM
     waterTop(ctx, terrain, variant, waterMask);
     return;
   }
+  if (terrain === "crater") {
+    craterTop(ctx, variant);
+    tileRim(ctx);
+    return;
+  }
   if (terrain === "mountain") rockTop(ctx, variant);
   else grassTop(ctx, terrain, variant);
   tileRim(ctx);
   shoreSand(ctx, variant, waterMask);
+}
+
+/** Blasted ground: a scorched bowl sunk into ash, cracked and still smouldering. */
+function craterTop(ctx: Ctx, variant: number): void {
+  const m = TERRAIN_MAT.crater;
+  diamondPath(ctx, 0, 0);
+  ctx.fillStyle = G(ctx, -TILE_W / 2, -TILE_H / 2, TILE_W / 2, TILE_H / 2, [
+    [0, lt(m.base, 0.12)],
+    [0.5, m.base],
+    [1, dk(m.base, 0.3)],
+  ]);
+  ctx.fill();
+
+  ctx.save();
+  diamondPath(ctx, 0, 0);
+  ctx.clip();
+  // the bowl: darker toward the centre so the tile reads as sunken
+  ctx.fillStyle = RG(ctx, 0, 0, TILE_W * 0.4, [
+    [0, "rgba(10,8,6,0.72)"],
+    [0.55, "rgba(20,16,12,0.4)"],
+    [1, "rgba(20,16,12,0)"],
+  ]);
+  ctx.beginPath();
+  ctx.ellipse(0, 0, TILE_W * 0.36, TILE_H * 0.36, 0, 0, Math.PI * 2);
+  ctx.fill();
+  // thrown-up rim catching the light on the back edge
+  ctx.beginPath();
+  ctx.ellipse(0, -1.5, TILE_W * 0.3, TILE_H * 0.3, 0, Math.PI, Math.PI * 2);
+  ctx.strokeStyle = alpha(m.hi, 0.55);
+  ctx.lineWidth = 2.4;
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.ellipse(0, 1.5, TILE_W * 0.3, TILE_H * 0.3, 0, 0, Math.PI);
+  ctx.strokeStyle = "rgba(8,6,4,0.5)";
+  ctx.lineWidth = 2.2;
+  ctx.stroke();
+  // cracks radiating out of the bowl
+  for (let i = 0; i < 6; i++) {
+    const a = hash(variant, i, 700) * Math.PI * 2;
+    const r0 = TILE_W * (0.12 + hash(variant, i, 710) * 0.1);
+    const r1 = TILE_W * (0.3 + hash(variant, i, 720) * 0.16);
+    const bend = (hash(variant, i, 730) - 0.5) * 8;
+    ctx.beginPath();
+    ctx.moveTo(Math.cos(a) * r0, Math.sin(a) * r0 * 0.5);
+    ctx.quadraticCurveTo(
+      Math.cos(a) * (r0 + r1) * 0.5 + bend,
+      Math.sin(a) * (r0 + r1) * 0.25 + bend * 0.4,
+      Math.cos(a) * r1,
+      Math.sin(a) * r1 * 0.5,
+    );
+    ctx.strokeStyle = i % 2 ? "rgba(6,5,4,0.55)" : "rgba(12,9,7,0.4)";
+    ctx.lineWidth = 1 + hash(variant, i, 740) * 0.8;
+    ctx.stroke();
+  }
+  // embers still glowing in the cracks
+  for (let i = 0; i < 3; i++) {
+    const px = (hash(variant, i, 750) - 0.5) * TILE_W * 0.4;
+    const py = (hash(variant, i, 760) - 0.5) * TILE_H * 0.4;
+    const r = 1 + hash(variant, i, 770) * 1.4;
+    ctx.fillStyle = RG(ctx, px, py, r * 3, [
+      [0, "rgba(255,120,40,0.5)"],
+      [1, "rgba(255,120,40,0)"],
+    ]);
+    ctx.beginPath();
+    ctx.ellipse(px, py, r * 3, r * 1.8, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.ellipse(px, py, r, r * 0.6, 0, 0, Math.PI * 2);
+    ctx.fillStyle = i % 2 ? "#ff8a3a" : "#e05a24";
+    ctx.fill();
+  }
+  ctx.restore();
 }
 
 /** Height every unexplored tile is drawn at, so fog never leaks the relief under it. */

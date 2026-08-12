@@ -3,7 +3,7 @@ import { PHILOSOPHY_DISCOUNT } from "./constants";
 export interface TechDef {
   id: string;
   name: string;
-  tier: 1 | 2 | 3;
+  tier: 1 | 2 | 3 | 4;
   requires: string | null;
   blurb: string;
 }
@@ -47,6 +47,8 @@ export const TECHS: TechDef[] = [
   { id: "forestry", name: "Forestry", tier: 2, requires: "hunting", blurb: "Build lumber huts." },
   { id: "mathematics", name: "Mathematics", tier: 3, requires: "forestry", blurb: "Train Catapults." },
   { id: "spiritualism", name: "Spiritualism", tier: 3, requires: "archery", blurb: "Build Grand Parks (⭐12)." },
+  { id: "rocketry", name: "Rocketry", tier: 4, requires: "mathematics", blurb: "Train Missile Launchers." },
+  { id: "atomic_theory", name: "Atomic Theory", tier: 4, requires: "rocketry", blurb: "Launch one nuke — once per game, for everyone." },
 ];
 
 export const TECH_BY_ID: Record<string, TechDef> = Object.fromEntries(TECHS.map((t) => [t.id, t]));

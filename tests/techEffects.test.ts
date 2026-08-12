@@ -321,7 +321,7 @@ describe("tech tree", () => {
       if (def.defenceTech) wired.add(def.defenceTech);
     }
     // techs read directly by engine code rather than by a data table
-    for (const id of ["roads", "trade", "strategy", "philosophy", "free_spirit", "navigation"]) {
+    for (const id of ["roads", "trade", "strategy", "philosophy", "free_spirit", "navigation", "atomic_theory"]) {
       wired.add(id);
     }
 

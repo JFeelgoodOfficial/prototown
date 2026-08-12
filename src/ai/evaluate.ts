@@ -210,7 +210,9 @@ export function scoreAction(
       // early tiers and economy-enabling techs first
       let score = 30 - tech.tier * 6;
       if (["organization", "hunting", "fishing", "farming", "forestry", "mining"].includes(tech.id)) score += 12;
-      if (["archery", "shields", "smithery", "chivalry"].includes(tech.id)) score += 8 * personality.aggression;
+      if (["archery", "shields", "smithery", "chivalry", "rocketry"].includes(tech.id)) score += 8 * personality.aggression;
+      // the one nuke is only worth researching toward while it is still on the table
+      if (tech.id === "atomic_theory") score += state.nukeLaunched ? -10 : 8 * personality.aggression;
       // techs that pay for themselves: income, cheaper research, star windfalls
       if (["trade", "philosophy", "whaling"].includes(tech.id)) score += 12 * personality.economy;
       // roads is worth more the more ground there is to cover
@@ -240,6 +242,20 @@ export function scoreAction(
       if (action.improvement === "walls") return 26 * personality.aggression;
       // a park is 250 points of nothing else; only Perfection games care
       return state.winMode === "perfection" ? 60 : 8;
+    }
+
+    case "LAUNCH_NUKE": {
+      const city = cityById(state, action.cityId);
+      if (!city) return -Infinity;
+      let score = 300 + city.level * 80 + (city.isCapital ? 150 : 0);
+      // the blast is indiscriminate: own units and cities in the 3x3 die too
+      for (const u of unitsOf(state, playerId)) {
+        if (dist(u.x, u.y, city.x, city.y) <= 1) score -= 45;
+      }
+      for (const c of citiesOf(state, playerId)) {
+        if (dist(c.x, c.y, city.x, city.y) <= 1) score -= 800;
+      }
+      return score * personality.aggression;
     }
 
     case "UPGRADE_BOAT":
