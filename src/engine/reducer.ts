@@ -54,15 +54,13 @@ export function applyAction(prev: GameState, action: Action): GameState {
   switch (action.type) {
     case "MOVE": {
       const unit = mustUnit(state, action.unitId);
-      const from = tileAt(state, unit.x, unit.y);
       const to = tileAt(state, action.x, action.y);
       const toWater = TERRAIN[to.terrain].water;
       if (unit.embarked === null && toWater) {
-        // Launching always happens at a port (movement enforces it). A port
-        // belonging to a player who knows Sailing puts out a ship directly,
-        // so the tech pays off at the dock instead of only as a paid refit.
-        const fromPort = from.building === "port";
-        unit.embarked = fromPort && hasTech(player, "sailing") ? "ship" : "raft";
+        // Boarding happens on the port tile itself (movement enforces it).
+        // A player who knows Sailing puts out a Ship directly, so the tech
+        // pays off at the dock instead of only as a paid refit.
+        unit.embarked = hasTech(player, "sailing") ? "ship" : "raft";
       } else if (unit.embarked !== null && !toWater) {
         unit.embarked = null;
       }
