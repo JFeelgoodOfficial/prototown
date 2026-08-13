@@ -1,6 +1,7 @@
 import type { UnitType } from "../data/units";
+import { sphereTopology } from "./topology";
 
-export type TerrainType = "field" | "forest" | "mountain" | "water" | "ocean" | "crater";
+export type TerrainType = "field" | "forest" | "mountain" | "water" | "ocean" | "crater" | "void";
 export type ResourceType = "fruit" | "animal" | "fish" | "whale" | "metal" | "crop";
 export type BuildingType = "lumber_hut" | "farm" | "mine" | "port";
 
@@ -72,11 +73,15 @@ export interface PlayerState {
 
 export type WinMode = "domination" | "perfection";
 
+/** Shape of the world. "void" tiles pad non-square shapes inside the square array. */
+export type MapType = "square" | "circle" | "continents" | "globe";
+
 export interface GameState {
   seed: number;
   /** PRNG cursor — advanced by every random draw so replays are deterministic */
   rngState: number;
   size: number;
+  mapType: MapType;
   turn: number;
   currentPlayerId: number;
   tiles: Tile[];
@@ -106,16 +111,46 @@ export interface RuinReward {
   label: string;
 }
 
-export function idx(state: Pick<GameState, "size">, x: number, y: number): number {
-  return y * state.size + x;
+/**
+ * The grid the tiles array is laid out on. Flat maps are size×size; a globe
+ * is the six n×n cube faces side by side — one row-major grid 6n wide and
+ * n tall, where `size` is the face resolution n. All indexing goes through
+ * these so nothing else needs to know which world shape it is on.
+ */
+export type Grid = Pick<GameState, "size" | "mapType">;
+
+export function gridWidth(state: Grid): number {
+  return state.mapType === "globe" ? state.size * 6 : state.size;
 }
 
-export function inBounds(state: Pick<GameState, "size">, x: number, y: number): boolean {
-  return x >= 0 && y >= 0 && x < state.size && y < state.size;
+export function gridHeight(state: Grid): number {
+  return state.size;
+}
+
+export function tileCount(state: Grid): number {
+  return gridWidth(state) * gridHeight(state);
+}
+
+export function idx(state: Grid, x: number, y: number): number {
+  return y * gridWidth(state) + x;
+}
+
+export function coordsOf(state: Grid, i: number): [number, number] {
+  const w = gridWidth(state);
+  return [i % w, Math.floor(i / w)];
+}
+
+export function inBounds(state: Grid, x: number, y: number): boolean {
+  return x >= 0 && y >= 0 && x < gridWidth(state) && y < gridHeight(state);
 }
 
 export function tileAt(state: GameState, x: number, y: number): Tile {
   return state.tiles[idx(state, x, y)];
+}
+
+/** In bounds and not an off-map void tile. */
+export function isPlayable(state: Pick<GameState, "size" | "mapType" | "tiles">, x: number, y: number): boolean {
+  return inBounds(state, x, y) && state.tiles[idx(state, x, y)].terrain !== "void";
 }
 
 export function unitAt(state: GameState, x: number, y: number): Unit | undefined {
@@ -148,8 +183,12 @@ export function hasTech(player: PlayerState, techId: string | null): boolean {
   return techId === null || player.techs.includes(techId);
 }
 
-/** All 8 neighbours (the reference game uses Moore adjacency). */
-export function neighbors(state: Pick<GameState, "size">, x: number, y: number): Array<[number, number]> {
+/** All 8 neighbours (the reference game uses Moore adjacency). On a globe
+    the adjacency folds across cube-face edges instead of stopping. */
+export function neighbors(state: Grid, x: number, y: number): Array<[number, number]> {
+  if (state.mapType === "globe") {
+    return sphereTopology(state.size).neighborTable[idx(state, x, y)].map((i) => coordsOf(state, i));
+  }
   const out: Array<[number, number]> = [];
   for (let dy = -1; dy <= 1; dy++)
     for (let dx = -1; dx <= 1; dx++) {
@@ -161,9 +200,38 @@ export function neighbors(state: Pick<GameState, "size">, x: number, y: number):
   return out;
 }
 
-/** Chebyshev distance — range and adjacency metric on the square grid. */
-export function dist(ax: number, ay: number, bx: number, by: number): number {
+/**
+ * Range and adjacency metric: Chebyshev distance on flat maps, where it is
+ * exactly the number of 8-way steps; graph distance in 8-way steps on a globe.
+ */
+export function dist(state: Grid, ax: number, ay: number, bx: number, by: number): number {
+  if (state.mapType === "globe") {
+    return sphereTopology(state.size).dist(idx(state, ax, ay), idx(state, bx, by));
+  }
   return Math.max(Math.abs(ax - bx), Math.abs(ay - by));
+}
+
+/**
+ * Every in-bounds tile within `r` steps of (x, y), the centre included.
+ * The replacement for `for dy/dx` square loops, which mean nothing across
+ * cube-face edges.
+ */
+export function disk(state: Grid, x: number, y: number, r: number): Array<[number, number]> {
+  if (state.mapType === "globe") {
+    const topo = sphereTopology(state.size);
+    const d = topo.distField(idx(state, x, y));
+    const out: Array<[number, number]> = [];
+    for (let i = 0; i < topo.count; i++) if (d[i] <= r) out.push(coordsOf(state, i));
+    return out;
+  }
+  const out: Array<[number, number]> = [];
+  for (let dy = -r; dy <= r; dy++)
+    for (let dx = -r; dx <= r; dx++) {
+      const nx = x + dx;
+      const ny = y + dy;
+      if (inBounds(state, nx, ny)) out.push([nx, ny]);
+    }
+  return out;
 }
 
 export function cloneState(state: GameState): GameState {

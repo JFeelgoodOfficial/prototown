@@ -1,5 +1,5 @@
 import type { GameState, Unit } from "../engine/state";
-import { unitById, cityById, tileAt, playerById, dist, idx, citiesOf, unitsOf } from "../engine/state";
+import { unitById, cityById, tileAt, playerById, dist, idx, neighbors, citiesOf, unitsOf, hasTech } from "../engine/state";
 import type { Action } from "../engine/actions";
 import { resolveCombat } from "../engine/combat";
 import { UNITS } from "../data/units";
@@ -100,12 +100,61 @@ export function objectivesFor(state: GameState, playerId: number): Objective[] {
     }
   }
   // frontier: unexplored tiles adjacent to explored ones
+  const seaworthy = hasTech(player, "sailing") || wantsSeafaring(state, playerId);
   for (const t of state.tiles) {
     if (player.explored[idx(state, t.x, t.y)] === 1) continue;
-    if (TERRAIN[t.terrain].water) continue;
+    const terr = TERRAIN[t.terrain];
+    if (terr.impassable) continue;
+    if (terr.water) {
+      // the sea is only worth exploring once boats are (or need to become) an option
+      if (seaworthy) out.push({ x: t.x, y: t.y, weight: 0.5 });
+      continue;
+    }
     out.push({ x: t.x, y: t.y, weight: 0.8 });
   }
   return out;
+}
+
+/**
+ * True when everything left worth having — a neutral village, an enemy city,
+ * unexplored land — lies across water rather than within walking distance.
+ * That is the moment ports and sailing stop being a luxury.
+ */
+export function wantsSeafaring(state: GameState, playerId: number): boolean {
+  const player = playerById(state, playerId);
+
+  // Everything a land unit could walk to from any of our units or cities.
+  const region = new Set<number>();
+  const queue: Array<[number, number]> = [];
+  const push = (x: number, y: number) => {
+    const key = idx(state, x, y);
+    if (region.has(key)) return;
+    const terr = TERRAIN[state.tiles[key].terrain];
+    if (terr.water || terr.impassable) return;
+    region.add(key);
+    queue.push([x, y]);
+  };
+  for (const u of unitsOf(state, playerId)) push(u.x, u.y);
+  for (const c of citiesOf(state, playerId)) push(c.x, c.y);
+  while (queue.length) {
+    const [x, y] = queue.pop()!;
+    for (const [nx, ny] of neighbors(state, x, y)) push(nx, ny);
+  }
+
+  let overseas = false;
+  for (const t of state.tiles) {
+    const i = idx(state, t.x, t.y);
+    const terr = TERRAIN[t.terrain];
+    const explored = player.explored[i] === 1;
+    const worthwhile =
+      (explored && t.village) ||
+      (explored && t.cityHere !== null && cityById(state, t.cityHere)?.ownerId !== playerId) ||
+      (!explored && !terr.water && !terr.impassable);
+    if (!worthwhile) continue;
+    if (region.has(i)) return false; // something to walk to first
+    overseas = true;
+  }
+  return overseas;
 }
 
 export function scoreAction(
@@ -127,7 +176,7 @@ export function scoreAction(
       if (r.defenderDies) score += 25 + UNITS[defender.type].cost * 8;
       if (r.attackerDies) score -= 30 + UNITS[attacker.type].cost * 6;
       // finishing blows near our cities are extra valuable
-      const nearOwnCity = citiesOf(state, playerId).some((c) => dist(defender.x, defender.y, c.x, c.y) <= 2);
+      const nearOwnCity = citiesOf(state, playerId).some((c) => dist(state, defender.x, defender.y, c.x, c.y) <= 2);
       if (nearOwnCity) score += 10;
       return score * personality.aggression;
     }
@@ -138,10 +187,10 @@ export function scoreAction(
     case "MOVE": {
       const unit = unitById(state, action.unitId);
       if (!unit) return -Infinity;
-      const best = nearestObjective(unit, objectives);
+      const best = nearestObjective(state, unit, objectives);
       if (!best) return 0;
-      const before = dist(unit.x, unit.y, best.x, best.y);
-      const after = dist(action.x, action.y, best.x, best.y);
+      const before = dist(state, unit.x, unit.y, best.x, best.y);
+      const after = dist(state, action.x, action.y, best.x, best.y);
       let score = (before - after) * 8 * best.weight * personality.expansion;
       // landing on a village/city tile sets up next-turn capture
       const destTile = tileAt(state, action.x, action.y);
@@ -155,6 +204,16 @@ export function scoreAction(
         const own = destTile.cityId !== null && cityById(state, destTile.cityId)?.ownerId === playerId;
         if (own) score += 12;
       }
+      // Stepping aboard at a port is progress in itself when the goal lies
+      // overseas — by straight-line distance it usually looks like a detour.
+      if (
+        unit.embarked === null &&
+        destTile.building === "port" &&
+        cityById(state, destTile.cityId ?? -1)?.ownerId === playerId &&
+        wantsSeafaring(state, playerId)
+      ) {
+        score += 30;
+      }
       return score;
     }
 
@@ -167,7 +226,7 @@ export function scoreAction(
       const holdsSettlement =
         tile.cityHere !== null && cityById(state, tile.cityHere)?.ownerId === playerId;
       const threatened = state.units.some(
-        (e) => e.ownerId !== playerId && dist(e.x, e.y, unit.x, unit.y) <= 2,
+        (e) => e.ownerId !== playerId && dist(state, e.x, e.y, unit.x, unit.y) <= 2,
       );
       if (!threatened && !holdsSettlement) return 1;
       return (holdsSettlement ? 26 : 0) + (threatened ? 20 : 0);
@@ -187,8 +246,16 @@ export function scoreAction(
       return (55 + windfall) * personality.economy;
     }
 
-    case "BUILD":
+    case "BUILD": {
+      // the first port is the way off the island once the land runs out
+      if (action.building === "port" && wantsSeafaring(state, playerId)) {
+        const hasPort = state.tiles.some(
+          (t) => t.building === "port" && t.cityId !== null && cityById(state, t.cityId)?.ownerId === playerId,
+        );
+        if (!hasPort) return 90 * personality.economy;
+      }
       return 50 * personality.economy;
+    }
 
     case "TRAIN": {
       const city = cityById(state, action.cityId);
@@ -219,6 +286,10 @@ export function scoreAction(
       if (tech.id === "roads") score += 6 + citiesOf(state, playerId).length * 2;
       if (["strategy", "construction"].includes(tech.id)) score += 8 * personality.aggression;
       if (tech.id === "spiritualism") score += state.winMode === "perfection" ? 20 : 4;
+      // marooned with nothing left to walk to: the sea techs jump the queue
+      if (["fishing", "sailing", "navigation"].includes(tech.id) && wantsSeafaring(state, playerId)) {
+        score += tech.id === "fishing" ? 15 : tech.id === "sailing" ? 25 : 18;
+      }
       // don't spend everything on research when broke
       if (player.stars < 8) score -= 15;
       return score * personality.research;
@@ -250,10 +321,10 @@ export function scoreAction(
       let score = 300 + city.level * 80 + (city.isCapital ? 150 : 0);
       // the blast is indiscriminate: own units and cities in the 3x3 die too
       for (const u of unitsOf(state, playerId)) {
-        if (dist(u.x, u.y, city.x, city.y) <= 1) score -= 45;
+        if (dist(state, u.x, u.y, city.x, city.y) <= 1) score -= 45;
       }
       for (const c of citiesOf(state, playerId)) {
-        if (dist(c.x, c.y, city.x, city.y) <= 1) score -= 800;
+        if (dist(state, c.x, c.y, city.x, city.y) <= 1) score -= 800;
       }
       return score * personality.aggression;
     }
@@ -269,11 +340,11 @@ export function scoreAction(
   }
 }
 
-function nearestObjective(unit: Unit, objectives: Objective[]): Objective | null {
+function nearestObjective(state: GameState, unit: Unit, objectives: Objective[]): Objective | null {
   let best: Objective | null = null;
   let bestVal = -Infinity;
   for (const o of objectives) {
-    const d = dist(unit.x, unit.y, o.x, o.y);
+    const d = dist(state, unit.x, unit.y, o.x, o.y);
     const val = o.weight * 10 - d;
     if (val > bestVal) {
       bestVal = val;

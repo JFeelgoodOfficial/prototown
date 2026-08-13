@@ -61,6 +61,8 @@ const TERRAIN_MAT: Record<TerrainType, TerrainMat> = {
   water: { base: "#3f9ac4", hi: "#8fd6ef", lo: "#1e6690", wall: "#1a4c6d", wallLo: "#0e2f45", lift: 2, jitter: 0 },
   ocean: { base: "#22688f", hi: "#5aa8c8", lo: "#0e3d5c", wall: "#0d3350", wallLo: "#071f31", lift: 0, jitter: 0 },
   crater: { base: "#4a423c", hi: "#6b6058", lo: "#241f1b", wall: "#3a322c", wallLo: "#1a1512", lift: 5, jitter: 2 },
+  // Off-map padding; never drawn, present so lookups stay total.
+  void: { base: "#0b1220", hi: "#0b1220", lo: "#0b1220", wall: "#0b1220", wallLo: "#0b1220", lift: 0, jitter: 0 },
 };
 
 /** How far the rock crust hangs below a tile top — deeper than any step on the board. */

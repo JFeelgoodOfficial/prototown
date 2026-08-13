@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import type { Difficulty } from "../game/difficulty";
-import type { WinMode } from "../engine/state";
+import type { MapType, WinMode } from "../engine/state";
 import { configForNewGame } from "../net/replay";
 import { gameHash, gameLink, type OnlineConfig, type SeatRef } from "../net/types";
 import { listRememberedGames, rememberGame, forgetGame } from "../net/registry";
@@ -20,6 +20,7 @@ export default function OnlineMenu({ onBack }: { onBack: () => void }) {
   const [aiCount, setAiCount] = useState(0);
   const [difficulty, setDifficulty] = useState<Difficulty>("normal");
   const [winMode, setWinMode] = useState<WinMode>("domination");
+  const [mapType, setMapType] = useState<MapType>("square");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [created, setCreated] = useState<Created | null>(null);
@@ -31,7 +32,7 @@ export default function OnlineMenu({ onBack }: { onBack: () => void }) {
     setError(null);
     try {
       const net = await import("../net/client");
-      const config = configForNewGame(aiCount, difficulty, winMode);
+      const config = configForNewGame(aiCount, difficulty, winMode, Math.random, mapType);
       const res = await net.createGame(config);
       const tokens = new Map(res.seats.map((s) => [s.seat_no, s.token]));
       const mySeat: SeatRef = { gameId: res.game_id, seatNo: 0, token: tokens.get(0)! };
@@ -106,6 +107,14 @@ export default function OnlineMenu({ onBack }: { onBack: () => void }) {
           />
         </Section>
       )}
+      <Section label="Map">
+        <Choice
+          options={["square", "circle", "continents", "globe"] as MapType[]}
+          value={mapType}
+          onPick={setMapType}
+          render={(m) => m.charAt(0).toUpperCase() + m.slice(1)}
+        />
+      </Section>
       <Section label="Victory">
         <Choice
           options={["domination", "perfection"] as WinMode[]}

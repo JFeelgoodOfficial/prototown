@@ -96,10 +96,10 @@ export function render(ctx: CanvasRenderingContext2D, state: GameState, view: Vi
   ctx.translate(-camera.x, -camera.y);
 
   const order = cachedDrawOrder(state.size);
-  const reachSet = new Set(view.reachable.map(([x, y]) => y * state.size + x));
+  const reachSet = new Set(view.reachable.map(([x, y]) => idx(state, x, y)));
   const attackSet = new Set(view.attackableUnitIds);
   const unitsByTile = new Map<number, Unit>();
-  for (const u of state.units) unitsByTile.set(u.y * state.size + u.x, u);
+  for (const u of state.units) unitsByTile.set(idx(state, u.x, u.y), u);
 
   // Cull to the visible world rect, padded for art that overhangs its tile
   // (mountains and figures above, nameplates below).
@@ -125,6 +125,7 @@ export function render(ctx: CanvasRenderingContext2D, state: GameState, view: Vi
     const i = idx(state, x, y);
     const explored = view.revealAll || view.explored[i] === 1;
     const tile = state.tiles[i];
+    if (tile.terrain === "void") continue;
     const [wx, wy0] = gridToWorld(x, y);
     if (offscreen(wx, wy0)) continue;
     const wy = topOf(x, y);
@@ -133,7 +134,7 @@ export function render(ctx: CanvasRenderingContext2D, state: GameState, view: Vi
       continue;
     }
     drawTileAt(ctx, state, tile, x, y, wx, wy);
-    if (reachSet.has(y * state.size + x)) {
+    if (reachSet.has(idx(state, x, y))) {
       diamondPath(ctx, wx, wy);
       ctx.fillStyle = "rgba(255,255,255,0.28)";
       ctx.fill();
@@ -418,7 +419,7 @@ export function pickTile(
   for (const probe of ALL_LIFTS) {
     const [gx, gy] = worldToGrid(wx, wy + probe);
     if (!inBounds(state, gx, gy)) continue;
-    const key = gy * state.size + gx;
+    const key = idx(state, gx, gy);
     if (tried.has(key)) continue;
     tried.add(key);
     seen++;
@@ -442,7 +443,12 @@ function waterMaskAt(state: GameState, x: number, y: number): number {
   EDGE_ORDER.forEach(([dx, dy], i) => {
     const nx = x + dx;
     const ny = y + dy;
-    if (!inBounds(state, nx, ny) || isWaterTerrain(state.tiles[idx(state, nx, ny)].terrain)) mask |= 1 << i;
+    if (
+      !inBounds(state, nx, ny) ||
+      state.tiles[idx(state, nx, ny)].terrain === "void" ||
+      isWaterTerrain(state.tiles[idx(state, nx, ny)].terrain)
+    )
+      mask |= 1 << i;
   });
   return mask;
 }

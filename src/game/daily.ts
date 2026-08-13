@@ -1,5 +1,6 @@
 import { TRIBES } from "../data/tribes";
 import type { NewGameOptions } from "../engine/mapgen";
+import type { MapType } from "../engine/state";
 import type { Difficulty } from "./difficulty";
 
 const RESULT_KEY = "polyforge-daily";
@@ -8,6 +9,9 @@ const RESULT_KEY = "polyforge-daily";
 export const DAILY_SIZE = 14;
 export const DAILY_OPPONENTS = 2;
 export const DAILY_DIFFICULTY: Difficulty = "normal";
+/** Shapes the daily may roll. Derived from the date seed, so it is the same
+    worldwide; grow this list once a shape has proven itself. */
+export const DAILY_MAP_ROTATION: MapType[] = ["square", "circle", "continents"];
 
 export function dailyKey(date = new Date()): string {
   const y = date.getUTCFullYear();
@@ -38,7 +42,8 @@ export function dailyOptions(date = new Date()): NewGameOptions {
   const seed = dailySeedForToday(date);
   const start = seed % TRIBES.length;
   const tribes = Array.from({ length: DAILY_OPPONENTS + 1 }, (_, i) => TRIBES[(start + i) % TRIBES.length].id);
-  return { seed, size: DAILY_SIZE, tribes, winMode: "perfection" };
+  const mapType = DAILY_MAP_ROTATION[seed % DAILY_MAP_ROTATION.length];
+  return { seed, size: DAILY_SIZE, mapType, tribes, winMode: "perfection" };
 }
 
 export interface DailyResult {

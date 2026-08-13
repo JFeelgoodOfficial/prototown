@@ -1,5 +1,5 @@
 import type { GameState, Unit } from "./state";
-import { idx, neighbors, unitAt, playerById, hasTech, cityById, citiesOf, inBounds } from "./state";
+import { idx, coordsOf, tileCount, neighbors, unitAt, playerById, hasTech, cityById, citiesOf } from "./state";
 import { TERRAIN } from "../data/terrain";
 import { ROAD_MOVE_COST } from "../data/constants";
 import { unitMovIn } from "./combat";
@@ -20,12 +20,12 @@ export function reachableTiles(state: GameState, unit: Unit): Array<[number, num
   const player = playerById(state, unit.ownerId);
   const start = idx(state, unit.x, unit.y);
   const canEnter = terrainOpenTo(state, unit.ownerId);
-  const budget: number[] = new Array(state.size * state.size).fill(-1);
+  const budget: number[] = new Array(tileCount(state)).fill(-1);
   budget[start] = unitMovIn(state, unit);
   const queue: number[] = [start];
   const out: Array<[number, number]> = [];
   // tiles already pushed to `out`, so collecting results stays linear
-  const listed = new Uint8Array(state.size * state.size);
+  const listed = new Uint8Array(tileCount(state));
 
   // Roads only help a land unit walking its own ground. Territory includes
   // coastal water (claimTerritory has no terrain check), so an embarked unit
@@ -38,8 +38,7 @@ export function reachableTiles(state: GameState, unit: Unit): Array<[number, num
 
   while (queue.length) {
     const cur = queue.shift()!;
-    const cx = cur % state.size;
-    const cy = Math.floor(cur / state.size);
+    const [cx, cy] = coordsOf(state, cur);
     const remaining = budget[cur];
     if (remaining <= 0) continue;
 
@@ -102,7 +101,7 @@ export function reachableTiles(state: GameState, unit: Unit): Array<[number, num
  */
 function roadNetwork(state: GameState, playerId: number): Uint8Array {
   const mine = new Set(citiesOf(state, playerId).map((c) => c.id));
-  const mask = new Uint8Array(state.size * state.size);
+  const mask = new Uint8Array(tileCount(state));
   for (let i = 0; i < state.tiles.length; i++) {
     const tile = state.tiles[i];
     if (tile.cityId === null || !mine.has(tile.cityId)) continue;
@@ -114,16 +113,10 @@ function roadNetwork(state: GameState, playerId: number): Uint8Array {
 
 /** Tiles standing next to an enemy unit, which end a move on entry. */
 function enemyAdjacencyMask(state: GameState, playerId: number): Uint8Array {
-  const mask = new Uint8Array(state.size * state.size);
+  const mask = new Uint8Array(tileCount(state));
   for (const u of state.units) {
     if (u.ownerId === playerId) continue;
-    for (let dy = -1; dy <= 1; dy++)
-      for (let dx = -1; dx <= 1; dx++) {
-        if (dx === 0 && dy === 0) continue;
-        const x = u.x + dx;
-        const y = u.y + dy;
-        if (inBounds(state, x, y)) mask[idx(state, x, y)] = 1;
-      }
+    for (const [x, y] of neighbors(state, u.x, u.y)) mask[idx(state, x, y)] = 1;
   }
   return mask;
 }

@@ -1,4 +1,4 @@
-import type { GameState, WinMode } from "../engine/state";
+import type { GameState, MapType, WinMode } from "../engine/state";
 import { newGame } from "../engine/mapgen";
 import { applyAction } from "../engine/reducer";
 import { computeLegalActions } from "../engine/legalActions";
@@ -23,6 +23,7 @@ export function initialState(config: OnlineConfig): GameState {
   return newGame({
     seed: config.seed,
     size: config.size,
+    mapType: config.mapType ?? "square",
     tribes: config.tribes,
     winMode: config.winMode,
     humanSeats: config.humanSeats,
@@ -53,6 +54,8 @@ export function buildState(config: OnlineConfig, log: ActionRow[]): GameState {
 }
 
 const sizeForPlayers = (n: number): number => (n <= 2 ? 11 : n === 3 ? 14 : 16);
+/** Globe boards store the cube-face resolution instead of an edge length. */
+const globeSizeForPlayers = (n: number): number => (n <= 2 ? 5 : n === 3 ? 6 : 7);
 
 /**
  * Roll the shared setup for a new online game: seed, randomly assigned tribes
@@ -64,6 +67,7 @@ export function configForNewGame(
   difficulty: Difficulty,
   winMode: WinMode,
   rng: () => number = Math.random,
+  mapType: MapType = "square",
 ): OnlineConfig {
   const humanSeats = 2;
   const total = humanSeats + aiCount;
@@ -76,7 +80,8 @@ export function configForNewGame(
     v: 1,
     engine: SAVE_VERSION,
     seed: Math.floor(rng() * 2 ** 31),
-    size: sizeForPlayers(total),
+    size: mapType === "globe" ? globeSizeForPlayers(total) : sizeForPlayers(total),
+    mapType,
     winMode,
     difficulty,
     tribes: pool.slice(0, total),

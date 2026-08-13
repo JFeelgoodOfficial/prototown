@@ -22,4 +22,5 @@ export const TERRAIN: Record<TerrainType, TerrainDef> = {
   water: { name: "Water", moveCost: 1, stopsMovement: false, requiresTech: null, defenceTech: "aquatism", water: true, impassable: false },
   ocean: { name: "Ocean", moveCost: 1, stopsMovement: false, requiresTech: null, defenceTech: "aquatism", water: true, impassable: false },
   crater: { name: "Crater", moveCost: 1, stopsMovement: true, requiresTech: null, defenceTech: null, water: false, impassable: true },
+  void: { name: "Void", moveCost: 1, stopsMovement: true, requiresTech: null, defenceTech: null, water: false, impassable: true },
 };

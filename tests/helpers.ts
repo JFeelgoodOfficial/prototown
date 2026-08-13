@@ -13,6 +13,7 @@ export function makeTestState(size = 8): GameState {
     seed: 1,
     rngState: 1,
     size,
+    mapType: "square",
     turn: 1,
     currentPlayerId: 0,
     tiles,
