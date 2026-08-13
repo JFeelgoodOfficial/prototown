@@ -1,5 +1,5 @@
 import type { GameState } from "../engine/state";
-import { unitById, cityById, playerById, unitsOf } from "../engine/state";
+import { unitById, cityById, playerById, unitsOf, idx } from "../engine/state";
 import type { Action } from "../engine/actions";
 import { applyAction } from "../engine/reducer";
 import { computeLegalActions } from "../engine/legalActions";
@@ -560,7 +560,7 @@ export class GameController {
   private isActionVisible(action: Action): boolean {
     if (!this.state) return false;
     const viewer = playerById(this.state, this.localSeat);
-    const seen = (x: number, y: number) => viewer.explored[y * this.state!.size + x] === 1;
+    const seen = (x: number, y: number) => viewer.explored[idx(this.state!, x, y)] === 1;
     switch (action.type) {
       case "MOVE":
         return seen(action.x, action.y);

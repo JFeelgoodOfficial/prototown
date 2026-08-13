@@ -95,7 +95,7 @@ describe("circle map generation", () => {
     const s = newGame(opts(7));
     for (let i = 0; i < s.cities.length; i++)
       for (let j = i + 1; j < s.cities.length; j++) {
-        expect(dist(s.cities[i].x, s.cities[i].y, s.cities[j].x, s.cities[j].y)).toBeGreaterThanOrEqual(4);
+        expect(dist(s, s.cities[i].x, s.cities[i].y, s.cities[j].x, s.cities[j].y)).toBeGreaterThanOrEqual(4);
       }
   });
 

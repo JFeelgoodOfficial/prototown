@@ -58,7 +58,7 @@ export function computeLegalActions(state: GameState, playerId: number): Action[
       const range = unitRange(unit);
       for (const enemy of state.units) {
         if (enemy.ownerId === playerId) continue;
-        if (dist(unit.x, unit.y, enemy.x, enemy.y) > range) continue;
+        if (dist(state, unit.x, unit.y, enemy.x, enemy.y) > range) continue;
         if (!watched[idx(state, enemy.x, enemy.y)]) continue;
         actions.push({ type: "ATTACK", unitId: unit.id, targetId: enemy.id });
       }

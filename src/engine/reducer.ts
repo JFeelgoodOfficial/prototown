@@ -11,6 +11,7 @@ import {
   neighbors,
   idx,
   isPlayable,
+  disk,
   dist,
 } from "./state";
 import type { Action } from "./actions";
@@ -264,7 +265,7 @@ export function applyAction(prev: GameState, action: Action): GameState {
         tile.cityId = null;
       }
 
-      state.units = state.units.filter((u) => dist(u.x, u.y, target.x, target.y) > 1);
+      state.units = state.units.filter((u) => dist(state, u.x, u.y, target.x, target.y) > 1);
       state.cities = state.cities.filter((c) => !deadCityIds.has(c.id));
       for (const tile of state.tiles) {
         if (tile.cityId !== null && deadCityIds.has(tile.cityId)) tile.cityId = null;
@@ -326,13 +327,12 @@ function applyReward(state: GameState, city: City, reward: string): void {
       break;
     case "explorer": {
       // an explorer wanders out from the city revealing terrain
+      const range = disk(state, city.x, city.y, 4);
       for (let i = 0; i < 6; i++) {
-        const x = city.x + nextInt(state, 9) - 4;
-        const y = city.y + nextInt(state, 9) - 4;
-        for (let dy = -1; dy <= 1; dy++)
-          for (let dx = -1; dx <= 1; dx++) {
-            if (isPlayable(state, x + dx, y + dy)) player.explored[idx(state, x + dx, y + dy)] = 1;
-          }
+        const [x, y] = range[nextInt(state, range.length)];
+        for (const [nx, ny] of disk(state, x, y, 1)) {
+          if (isPlayable(state, nx, ny)) player.explored[idx(state, nx, ny)] = 1;
+        }
       }
       break;
     }
@@ -421,19 +421,15 @@ function claimRuin(state: GameState, unit: Unit, tile: Tile): void {
       // the closest city takes in whoever was sheltering here
       let best = ownCities[0];
       for (const c of ownCities) {
-        if (dist(unit.x, unit.y, c.x, c.y) < dist(unit.x, unit.y, best.x, best.y)) best = c;
+        if (dist(state, unit.x, unit.y, c.x, c.y) < dist(state, unit.x, unit.y, best.x, best.y)) best = c;
       }
       addPopulation(best, RUIN_POPULATION);
       label = `${best.name} +${RUIN_POPULATION} pop`;
       break;
     }
     case "map": {
-      for (let dy = -RUIN_MAP_RADIUS; dy <= RUIN_MAP_RADIUS; dy++) {
-        for (let dx = -RUIN_MAP_RADIUS; dx <= RUIN_MAP_RADIUS; dx++) {
-          const x = unit.x + dx;
-          const y = unit.y + dy;
-          if (isPlayable(state, x, y)) player.explored[idx(state, x, y)] = 1;
-        }
+      for (const [x, y] of disk(state, unit.x, unit.y, RUIN_MAP_RADIUS)) {
+        if (isPlayable(state, x, y)) player.explored[idx(state, x, y)] = 1;
       }
       label = "Maps found";
       break;

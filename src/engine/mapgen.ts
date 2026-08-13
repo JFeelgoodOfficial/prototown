@@ -1,5 +1,6 @@
-import type { GameState, PlayerState, Tile, TerrainType, City, Unit, MapType } from "./state";
-import { idx, inBounds, neighbors, dist } from "./state";
+import type { GameState, PlayerState, Tile, TerrainType, City, Unit, MapType, Grid } from "./state";
+import { idx, coordsOf, neighbors, dist, disk, gridWidth, gridHeight, tileCount } from "./state";
+import { sphereTopology } from "./topology";
 import { mulberry32, nextInt } from "./rng";
 import { tribeById } from "../data/tribes";
 import { INITIAL_STARS, MAX_TURNS_PERFECTION, RUIN_TILES_PER, WHALE_SHARE } from "../data/constants";
@@ -55,14 +56,14 @@ function valueNoise(rand: () => number, size: number, freq: number): number[] {
 /** Pick capital positions greedily maximizing the minimum pairwise distance. */
 function placeCapitals(
   rand: () => number,
-  size: number,
+  grid: Grid,
   count: number,
   valid?: (x: number, y: number) => boolean,
   margin = 2,
 ): Array<[number, number]> {
   const candidates: Array<[number, number]> = [];
-  for (let y = margin; y < size - margin; y++)
-    for (let x = margin; x < size - margin; x++) {
+  for (let y = margin; y < gridHeight(grid) - margin; y++)
+    for (let x = margin; x < gridWidth(grid) - margin; x++) {
       if (valid && !valid(x, y)) continue;
       candidates.push([x, y]);
     }
@@ -73,7 +74,7 @@ function placeCapitals(
     let best: [number, number] | null = null;
     let bestScore = -1;
     for (const c of candidates) {
-      const d = Math.min(...picks.map((p) => dist(c[0], c[1], p[0], p[1])));
+      const d = Math.min(...picks.map((p) => dist(grid, p[0], p[1], c[0], c[1])));
       if (d > bestScore) {
         bestScore = d;
         best = c;
@@ -84,44 +85,89 @@ function placeCapitals(
   return picks;
 }
 
+/**
+ * Smooth value noise in [0,1] for globe maps: a random 3D lattice over the
+ * cube [-1,1]³, sampled at each tile's centre on the unit sphere. Seamless by
+ * construction — no face of the cube-sphere sees an edge in the noise.
+ */
+function sphereNoise(rand: () => number, n: number, gridN: number): number[] {
+  const lattice: number[] = [];
+  for (let i = 0; i < gridN * gridN * gridN; i++) lattice.push(rand());
+  const clampG = (g: number) => Math.max(0, Math.min(g, gridN - 1));
+  const at = (gx: number, gy: number, gz: number) =>
+    lattice[(clampG(gz) * gridN + clampG(gy)) * gridN + clampG(gx)];
+  const smooth = (t: number) => t * t * (3 - 2 * t);
+
+  const topo = sphereTopology(n);
+  const out: number[] = new Array(topo.count);
+  for (let i = 0; i < topo.count; i++) {
+    const [px, py, pz] = topo.centers[i];
+    const fx = ((px + 1) / 2) * (gridN - 1);
+    const fy = ((py + 1) / 2) * (gridN - 1);
+    const fz = ((pz + 1) / 2) * (gridN - 1);
+    const x0 = Math.floor(fx);
+    const y0 = Math.floor(fy);
+    const z0 = Math.floor(fz);
+    const tx = smooth(fx - x0);
+    const ty = smooth(fy - y0);
+    const tz = smooth(fz - z0);
+    const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
+    const v00 = lerp(at(x0, y0, z0), at(x0 + 1, y0, z0), tx);
+    const v10 = lerp(at(x0, y0 + 1, z0), at(x0 + 1, y0 + 1, z0), tx);
+    const v01 = lerp(at(x0, y0, z0 + 1), at(x0 + 1, y0, z0 + 1), tx);
+    const v11 = lerp(at(x0, y0 + 1, z0 + 1), at(x0 + 1, y0 + 1, z0 + 1), tx);
+    out[i] = lerp(lerp(v00, v10, ty), lerp(v01, v11, ty), tz);
+  }
+  return out;
+}
+
 export function newGame(opts: NewGameOptions): GameState {
   const { seed, size, tribes, winMode } = opts;
   const mapType = opts.mapType ?? "square";
   if (tribes.length < 2 || tribes.length > 4) throw new Error("2-4 tribes");
   const rand = mulberry32(seed);
+  const grid: Grid = { size, mapType };
+  const W = gridWidth(grid);
+  const H = gridHeight(grid);
 
   // On a circle map, capitals stay a full tile inside the rim so every
-  // neighbour of a capital is playable.
+  // neighbour of a capital is playable. On a globe they stay off the 24
+  // cube-corner tiles, whose seven neighbours would be an unfair start.
   const capitalOk =
     mapType === "circle"
       ? (x: number, y: number) =>
           insideCircle(size, x, y) &&
           [-1, 0, 1].every((dy) => [-1, 0, 1].every((dx) => insideCircle(size, x + dx, y + dy)))
-      : undefined;
-  const capitals = placeCapitals(rand, size, tribes.length, capitalOk, mapType === "continents" ? 3 : 2);
+      : mapType === "globe"
+        ? (x: number, y: number) => !sphereTopology(size).cornerTiles.has(idx(grid, x, y))
+        : undefined;
+  const capitalMargin = mapType === "continents" ? 3 : mapType === "globe" ? 0 : 2;
+  const capitals = placeCapitals(rand, grid, tribes.length, capitalOk, capitalMargin);
 
   // Terrain from two noise fields: elevation decides water/land/mountain,
   // moisture decides forest. Tribe biases tilt generation near each capital.
-  const elevation = valueNoise(rand, size, 4);
-  const moisture = valueNoise(rand, size, 3);
+  const elevation =
+    mapType === "globe" ? sphereNoise(rand, size, Math.max(3, Math.round(size * 0.8))) : valueNoise(rand, size, 4);
+  const moisture =
+    mapType === "globe" ? sphereNoise(rand, size, Math.max(3, Math.round(size * 0.6))) : valueNoise(rand, size, 3);
 
   const tiles: Tile[] = [];
   // Blob-plus-noise elevation kept around so later passes can raise the
   // shallowest sea when a starting continent comes out too small.
-  const continentElevation: number[] = new Array(size * size).fill(0);
-  for (let y = 0; y < size; y++) {
-    for (let x = 0; x < size; x++) {
+  const continentElevation: number[] = new Array(W * H).fill(0);
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) {
       if (mapType === "circle" && !insideCircle(size, x, y)) {
         tiles.push({ x, y, terrain: "void", resource: null, building: null, cityId: null, village: false, cityHere: null, ruin: false });
         continue;
       }
-      let e = elevation[y * size + x];
-      let m = moisture[y * size + x];
+      let e = elevation[y * W + x];
+      let m = moisture[y * W + x];
 
       // Bias terrain near capitals by tribe preference
       for (let i = 0; i < capitals.length; i++) {
         const [cx, cy] = capitals[i];
-        const d = dist(x, y, cx, cy);
+        const d = dist(grid, cx, cy, x, y);
         if (d <= 3) {
           const tribe = tribeById(tribes[i]);
           const w = (3 - d) / 3;
@@ -139,7 +185,7 @@ export function newGame(opts: NewGameOptions): GameState {
           ...capitals.map(([cx, cy]) => Math.max(0, 1 - Math.hypot(x - cx, y - cy) / (size * 0.3))),
         );
         const e2 = 0.5 * e + 0.5 * blob;
-        continentElevation[y * size + x] = e2;
+        continentElevation[y * W + x] = e2;
         if (e2 <= 0.45) terrain = "ocean";
         else if (e > 0.78) terrain = "mountain";
         else terrain = m > 0.62 ? "forest" : "field";
@@ -185,9 +231,13 @@ export function newGame(opts: NewGameOptions): GameState {
   // Guarantee land reachability between capitals: carve field corridors.
   // On a circle map, route via the centre tile — each x-then-y leg only ever
   // moves a coordinate toward the centre, so the whole path stays in the disc.
-  // Continents maps deliberately skip this: the ocean between landmasses is
-  // the point, and crossing it takes sailing.
-  if (mapType === "continents") {
+  // On a globe, x-then-y walks mean nothing across cube faces, so corridors
+  // follow BFS shortest paths over the sphere instead. Continents maps
+  // deliberately skip this: the ocean between landmasses is the point, and
+  // crossing it takes sailing.
+  if (mapType === "globe") {
+    carveCorridorsGlobe(state, capitals);
+  } else if (mapType === "continents") {
     ensureMinLandmass(state, capitals, continentElevation, new Set());
     coastalShelf(state);
     // Channel-carving can nibble a continent back below the minimum, so the
@@ -203,17 +253,17 @@ export function newGame(opts: NewGameOptions): GameState {
   }
 
   // Villages: ~1 per 20 tiles, on land, spaced away from capitals and each other
-  const villageTarget = Math.floor((size * size) / 20);
+  const villageTarget = Math.floor((W * H) / 20);
   let villagesPlaced = 0;
   let attempts = 0;
   while (villagesPlaced < villageTarget && attempts < 4000) {
     attempts++;
-    const x = nextInt(state, size);
-    const y = nextInt(state, size);
+    const x = nextInt(state, W);
+    const y = nextInt(state, H);
     const t = tiles[idx(state, x, y)];
     if (t.terrain !== "field" && t.terrain !== "forest") continue;
-    const nearCapital = capitals.some(([cx, cy]) => dist(x, y, cx, cy) < 3);
-    const nearVillage = tiles.some((o) => o.village && dist(x, y, o.x, o.y) < 3);
+    const nearCapital = capitals.some(([cx, cy]) => dist(state, cx, cy, x, y) < 3);
+    const nearVillage = tiles.some((o) => o.village && dist(state, o.x, o.y, x, y) < 3);
     if (nearCapital || nearVillage) continue;
     t.terrain = "field";
     t.village = true;
@@ -223,18 +273,18 @@ export function newGame(opts: NewGameOptions): GameState {
 
   // Ruins: rarer than villages and pushed out toward the unexplored middle
   // ground, so exploring away from home has a payoff of its own.
-  const ruinTarget = Math.floor((size * size) / RUIN_TILES_PER);
+  const ruinTarget = Math.floor((W * H) / RUIN_TILES_PER);
   let ruinsPlaced = 0;
   attempts = 0;
   while (ruinsPlaced < ruinTarget && attempts < 4000) {
     attempts++;
-    const x = nextInt(state, size);
-    const y = nextInt(state, size);
+    const x = nextInt(state, W);
+    const y = nextInt(state, H);
     const t = tiles[idx(state, x, y)];
     if (t.terrain !== "field" && t.terrain !== "forest" && t.terrain !== "mountain") continue;
     if (t.village || t.ruin) continue;
-    if (capitals.some(([cx, cy]) => dist(x, y, cx, cy) < 4)) continue;
-    if (tiles.some((o) => o.ruin && dist(x, y, o.x, o.y) < 3)) continue;
+    if (capitals.some(([cx, cy]) => dist(state, cx, cy, x, y) < 4)) continue;
+    if (tiles.some((o) => o.ruin && dist(state, o.x, o.y, x, y) < 3)) continue;
     t.ruin = true;
     t.resource = null;
     ruinsPlaced++;
@@ -247,7 +297,7 @@ export function newGame(opts: NewGameOptions): GameState {
   ];
   for (const t of tiles) {
     if (t.village || t.ruin || t.cityHere !== null) continue;
-    const nearSettlement = settlementTiles.some((s) => dist(t.x, t.y, s.x, s.y) <= 2);
+    const nearSettlement = settlementTiles.some((s) => dist(state, s.x, s.y, t.x, t.y) <= 2);
     const chance = nearSettlement ? 0.5 : 0.08;
     if (t.terrain === "field") {
       if (nextInt(state, 100) < chance * 60) t.resource = nextInt(state, 2) === 0 ? "fruit" : "crop";
@@ -276,7 +326,7 @@ export function newGame(opts: NewGameOptions): GameState {
       isHuman: i < (opts.humanSeats ?? 1),
       stars: INITIAL_STARS,
       techs: [tribe.startingTech],
-      explored: new Array(size * size).fill(0),
+      explored: new Array(tileCount(state)).fill(0),
       alive: true,
     };
     state.players.push(player);
@@ -327,15 +377,10 @@ export function newGame(opts: NewGameOptions): GameState {
 
 /** Claim unowned tiles within the city's border radius. */
 export function claimTerritory(state: GameState, city: City): void {
-  for (let dy = -city.borderRadius; dy <= city.borderRadius; dy++) {
-    for (let dx = -city.borderRadius; dx <= city.borderRadius; dx++) {
-      const x = city.x + dx;
-      const y = city.y + dy;
-      if (!inBounds(state, x, y)) continue;
-      const t = state.tiles[idx(state, x, y)];
-      if (t.terrain === "void") continue;
-      if (t.cityId === null) t.cityId = city.id;
-    }
+  for (const [x, y] of disk(state, city.x, city.y, city.borderRadius)) {
+    const t = state.tiles[idx(state, x, y)];
+    if (t.terrain === "void") continue;
+    if (t.cityId === null) t.cityId = city.id;
   }
 }
 
@@ -371,7 +416,7 @@ function ensureMinLandmass(
   keepWet: Set<number>,
 ): void {
   for (const [cx, cy] of capitals) {
-    for (let guard = 0; guard < state.size * state.size; guard++) {
+    for (let guard = 0; guard < tileCount(state); guard++) {
       const mass = landmassOf(state, cx, cy);
       if (mass.size >= MIN_CONTINENT) break;
       let best = -1;
@@ -438,7 +483,7 @@ function ensureCoastalWater(state: GameState, capitals: Array<[number, number]>)
     keepWet.add(idx(state, sea.x, sea.y));
     let x = sea.x;
     let y = sea.y;
-    while (dist(x, y, cx, cy) > 1) {
+    while (dist(state, x, y, cx, cy) > 1) {
       if (x !== cx) x += Math.sign(cx - x);
       else y += Math.sign(cy - y);
       const key = idx(state, x, y);
@@ -449,6 +494,36 @@ function ensureCoastalWater(state: GameState, capitals: Array<[number, number]>)
     }
   }
   return keepWet;
+}
+
+/**
+ * Globe corridors: convert water along a BFS shortest path between each pair
+ * of consecutive capitals, so all capitals connect by land on the sphere.
+ */
+function carveCorridorsGlobe(state: GameState, capitals: Array<[number, number]>): void {
+  for (let i = 1; i < capitals.length; i++) {
+    const [ax, ay] = capitals[i - 1];
+    const [bx, by] = capitals[i];
+    const start = idx(state, ax, ay);
+    const goal = idx(state, bx, by);
+    const parent = new Map<number, number>();
+    parent.set(start, start);
+    const queue = [start];
+    for (let head = 0; head < queue.length && !parent.has(goal); head++) {
+      const cur = queue[head];
+      const [cx, cy] = coordsOf(state, cur);
+      for (const [nx, ny] of neighbors(state, cx, cy)) {
+        const key = idx(state, nx, ny);
+        if (parent.has(key)) continue;
+        parent.set(key, cur);
+        queue.push(key);
+      }
+    }
+    for (let cur = goal; cur !== start; cur = parent.get(cur)!) {
+      const t = state.tiles[cur];
+      if (t.terrain === "water" || t.terrain === "ocean") t.terrain = "field";
+    }
+  }
 }
 
 /** Carve 1-wide field corridors along L-paths so all capitals connect by land. */

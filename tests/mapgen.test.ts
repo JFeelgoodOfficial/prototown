@@ -32,7 +32,7 @@ describe("map generation", () => {
     }
     for (let i = 0; i < s.cities.length; i++)
       for (let j = i + 1; j < s.cities.length; j++) {
-        expect(dist(s.cities[i].x, s.cities[i].y, s.cities[j].x, s.cities[j].y)).toBeGreaterThanOrEqual(4);
+        expect(dist(s, s.cities[i].x, s.cities[i].y, s.cities[j].x, s.cities[j].y)).toBeGreaterThanOrEqual(4);
       }
   });
 
@@ -42,7 +42,7 @@ describe("map generation", () => {
     expect(villages.length).toBeGreaterThan(3);
     for (const v of villages) {
       expect(v.terrain).toBe("field");
-      for (const c of s.cities) expect(dist(v.x, v.y, c.x, c.y)).toBeGreaterThanOrEqual(3);
+      for (const c of s.cities) expect(dist(s, v.x, v.y, c.x, c.y)).toBeGreaterThanOrEqual(3);
     }
   });
 

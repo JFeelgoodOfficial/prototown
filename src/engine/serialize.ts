@@ -1,6 +1,6 @@
 import type { GameState } from "./state";
 
-export const SAVE_VERSION = 5;
+export const SAVE_VERSION = 6;
 
 export interface SaveFile {
   version: number;

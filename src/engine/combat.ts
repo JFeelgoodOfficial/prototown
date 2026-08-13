@@ -65,7 +65,7 @@ export function flankBonus(state: GameState, attacker: Unit, defender: Unit): nu
   let pressing = 0;
   for (const u of state.units) {
     if (u.ownerId !== attacker.ownerId || u.id === attacker.id) continue;
-    if (dist(u.x, u.y, defender.x, defender.y) <= 1) pressing++;
+    if (dist(state, u.x, u.y, defender.x, defender.y) <= 1) pressing++;
   }
   return 1 + Math.min(FLANK_BONUS_MAX, pressing * FLANK_BONUS_PER_UNIT);
 }
@@ -100,7 +100,7 @@ export function resolveCombat(state: GameState, attacker: Unit, defender: Unit):
   let attackerDies = false;
   if (!defenderDies) {
     const inRetaliationRange =
-      dist(attacker.x, attacker.y, defender.x, defender.y) <= unitRange(defender);
+      dist(state, attacker.x, attacker.y, defender.x, defender.y) <= unitRange(defender);
     if (inRetaliationRange) {
       // retaliation is the defender striking back, so it uses their tribe's bonus
       const retaliationMultiplier = abilityOf(state, defender.ownerId).damageMultiplier;

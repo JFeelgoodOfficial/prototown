@@ -176,7 +176,7 @@ export function scoreAction(
       if (r.defenderDies) score += 25 + UNITS[defender.type].cost * 8;
       if (r.attackerDies) score -= 30 + UNITS[attacker.type].cost * 6;
       // finishing blows near our cities are extra valuable
-      const nearOwnCity = citiesOf(state, playerId).some((c) => dist(defender.x, defender.y, c.x, c.y) <= 2);
+      const nearOwnCity = citiesOf(state, playerId).some((c) => dist(state, defender.x, defender.y, c.x, c.y) <= 2);
       if (nearOwnCity) score += 10;
       return score * personality.aggression;
     }
@@ -187,10 +187,10 @@ export function scoreAction(
     case "MOVE": {
       const unit = unitById(state, action.unitId);
       if (!unit) return -Infinity;
-      const best = nearestObjective(unit, objectives);
+      const best = nearestObjective(state, unit, objectives);
       if (!best) return 0;
-      const before = dist(unit.x, unit.y, best.x, best.y);
-      const after = dist(action.x, action.y, best.x, best.y);
+      const before = dist(state, unit.x, unit.y, best.x, best.y);
+      const after = dist(state, action.x, action.y, best.x, best.y);
       let score = (before - after) * 8 * best.weight * personality.expansion;
       // landing on a village/city tile sets up next-turn capture
       const destTile = tileAt(state, action.x, action.y);
@@ -226,7 +226,7 @@ export function scoreAction(
       const holdsSettlement =
         tile.cityHere !== null && cityById(state, tile.cityHere)?.ownerId === playerId;
       const threatened = state.units.some(
-        (e) => e.ownerId !== playerId && dist(e.x, e.y, unit.x, unit.y) <= 2,
+        (e) => e.ownerId !== playerId && dist(state, e.x, e.y, unit.x, unit.y) <= 2,
       );
       if (!threatened && !holdsSettlement) return 1;
       return (holdsSettlement ? 26 : 0) + (threatened ? 20 : 0);
@@ -321,10 +321,10 @@ export function scoreAction(
       let score = 300 + city.level * 80 + (city.isCapital ? 150 : 0);
       // the blast is indiscriminate: own units and cities in the 3x3 die too
       for (const u of unitsOf(state, playerId)) {
-        if (dist(u.x, u.y, city.x, city.y) <= 1) score -= 45;
+        if (dist(state, u.x, u.y, city.x, city.y) <= 1) score -= 45;
       }
       for (const c of citiesOf(state, playerId)) {
-        if (dist(c.x, c.y, city.x, city.y) <= 1) score -= 800;
+        if (dist(state, c.x, c.y, city.x, city.y) <= 1) score -= 800;
       }
       return score * personality.aggression;
     }
@@ -340,11 +340,11 @@ export function scoreAction(
   }
 }
 
-function nearestObjective(unit: Unit, objectives: Objective[]): Objective | null {
+function nearestObjective(state: GameState, unit: Unit, objectives: Objective[]): Objective | null {
   let best: Objective | null = null;
   let bestVal = -Infinity;
   for (const o of objectives) {
-    const d = dist(unit.x, unit.y, o.x, o.y);
+    const d = dist(state, unit.x, unit.y, o.x, o.y);
     const val = o.weight * 10 - d;
     if (val > bestVal) {
       bestVal = val;
