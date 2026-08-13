@@ -17,7 +17,13 @@ const MAP_LABELS: Record<MapType, string> = {
   globe: "Globe — a spinning world with no edges",
 };
 /** Shapes offered on the setup screen. */
-const MAP_CHOICES: MapType[] = ["square", "circle", "continents"];
+const MAP_CHOICES: MapType[] = ["square", "circle", "continents", "globe"];
+
+/** Globe boards use the cube-face resolution n (6n² tiles), sized to keep
+    tile counts close to the flat boards for the same crowd. */
+export function globeFaceSize(opponents: number): number {
+  return opponents === 1 ? 5 : opponents === 2 ? 6 : 7;
+}
 
 /** The new-game setup, reached from Start on the title screen. */
 export default function MainMenu({ onBack }: { onBack?: () => void }) {
@@ -41,7 +47,8 @@ export default function MainMenu({ onBack }: { onBack?: () => void }) {
   if (onlineOpen) return <OnlineMenu onBack={() => setOnlineOpen(false)} />;
 
   const start = () => {
-    const size = opponents === 1 ? 11 : opponents === 2 ? 14 : 16;
+    const size =
+      mapType === "globe" ? globeFaceSize(opponents) : opponents === 1 ? 11 : opponents === 2 ? 14 : 16;
     const others = TRIBES.filter((t) => t.id !== tribeId).map((t) => t.id);
     const tribes = [tribeId, ...others.slice(0, opponents)];
     const seed = Math.floor(Math.random() * 2 ** 31);

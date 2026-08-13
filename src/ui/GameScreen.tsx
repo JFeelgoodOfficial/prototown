@@ -13,15 +13,18 @@ import {
   anchorZoom,
   type Camera,
 } from "../render/camera";
-import { playerById, unitAt, isPlayable } from "../engine/state";
+import { playerById, isPlayable } from "../engine/state";
 import { watchedMask } from "../engine/fog";
 import TopBar from "./TopBar";
 import SidePanel from "./SidePanel";
 import RewardPicker from "./RewardPicker";
 import OnlineStatusBar from "./OnlineStatusBar";
+import GlobeCanvas from "./GlobeCanvas";
+import { handleBoardClick } from "./boardClick";
 
 export default function GameScreen() {
   const game = useGame();
+  const isGlobe = controller.state?.mapType === "globe";
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const cameraRef = useRef<Camera | null>(null);
   const hoverRef = useRef<[number, number] | null>(null);
@@ -306,7 +309,7 @@ export default function GameScreen() {
     const onPointerUp = (e: PointerEvent) => {
       const isTap = pointers.size === 1 && pointers.has(e.pointerId) && tapCandidate && !dragging;
       endPointer(e);
-      if (isTap) handleClick(toGrid(e.clientX, e.clientY));
+      if (isTap) handleBoardClick(toGrid(e.clientX, e.clientY));
     };
 
     const onPointerCancel = (e: PointerEvent) => {
@@ -409,15 +412,21 @@ export default function GameScreen() {
     <div className="flex h-full flex-col">
       <TopBar />
       <div className="relative min-h-0 flex-1">
-        <canvas ref={canvasRef} className="absolute inset-0 cursor-pointer touch-none select-none" />
+        {isGlobe ? (
+          <GlobeCanvas />
+        ) : (
+          <>
+            <canvas ref={canvasRef} className="absolute inset-0 cursor-pointer touch-none select-none" />
+            <Minimap cameraRef={cameraRef} viewRef={viewRef} />
+            <div className="absolute bottom-3 right-3 flex flex-col gap-1.5">
+              <MapButton label="+" title="Zoom in" onPress={() => zoomBy(1.3)} />
+              <MapButton label="−" title="Zoom out" onPress={() => zoomBy(1 / 1.3)} />
+              <MapButton label="⌖" title="Fit map to screen" onPress={recenter} />
+            </div>
+          </>
+        )}
         <SidePanel />
         <RewardPicker />
-        <Minimap cameraRef={cameraRef} viewRef={viewRef} />
-        <div className="absolute bottom-3 right-3 flex flex-col gap-1.5">
-          <MapButton label="+" title="Zoom in" onPress={() => zoomBy(1.3)} />
-          <MapButton label="−" title="Zoom out" onPress={() => zoomBy(1 / 1.3)} />
-          <MapButton label="⌖" title="Fit map to screen" onPress={recenter} />
-        </div>
         {game.lastSavedAt !== null && (
           <div
             key={game.lastSavedAt}
@@ -559,36 +568,4 @@ function MapButton({ label, title, onPress }: { label: string; title: string; on
       {label}
     </button>
   );
-}
-
-function handleClick([x, y]: [number, number]): void {
-  const s = controller.state;
-  if (!s || controller.aiBusy || !isPlayable(s, x, y)) return;
-  if (controller.legal.some((a) => a.type === "CHOOSE_REWARD")) return; // modal open
-
-  const selected = controller.selectedUnitId;
-  if (selected !== null) {
-    const move = controller.legal.find((a) => a.type === "MOVE" && a.unitId === selected && a.x === x && a.y === y);
-    if (move) {
-      controller.dispatch(move);
-      return;
-    }
-    const targetUnit = unitAt(s, x, y);
-    if (targetUnit) {
-      const attack = controller.legal.find(
-        (a) => a.type === "ATTACK" && a.unitId === selected && a.targetId === targetUnit.id,
-      );
-      if (attack) {
-        controller.dispatch(attack);
-        return;
-      }
-    }
-  }
-
-  const unit = unitAt(s, x, y);
-  if (unit && unit.ownerId === controller.localSeat) {
-    controller.selectUnit(unit.id === selected ? null : unit.id);
-    return;
-  }
-  controller.selectTile([x, y]);
 }
