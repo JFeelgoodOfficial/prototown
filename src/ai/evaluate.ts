@@ -102,7 +102,7 @@ export function objectivesFor(state: GameState, playerId: number): Objective[] {
   // frontier: unexplored tiles adjacent to explored ones
   for (const t of state.tiles) {
     if (player.explored[idx(state, t.x, t.y)] === 1) continue;
-    if (TERRAIN[t.terrain].water) continue;
+    if (TERRAIN[t.terrain].water || TERRAIN[t.terrain].impassable) continue;
     out.push({ x: t.x, y: t.y, weight: 0.8 });
   }
   return out;

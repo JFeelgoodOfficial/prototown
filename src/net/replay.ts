@@ -1,4 +1,4 @@
-import type { GameState, WinMode } from "../engine/state";
+import type { GameState, MapType, WinMode } from "../engine/state";
 import { newGame } from "../engine/mapgen";
 import { applyAction } from "../engine/reducer";
 import { computeLegalActions } from "../engine/legalActions";
@@ -23,6 +23,7 @@ export function initialState(config: OnlineConfig): GameState {
   return newGame({
     seed: config.seed,
     size: config.size,
+    mapType: config.mapType ?? "square",
     tribes: config.tribes,
     winMode: config.winMode,
     humanSeats: config.humanSeats,
@@ -64,6 +65,7 @@ export function configForNewGame(
   difficulty: Difficulty,
   winMode: WinMode,
   rng: () => number = Math.random,
+  mapType: MapType = "square",
 ): OnlineConfig {
   const humanSeats = 2;
   const total = humanSeats + aiCount;
@@ -77,6 +79,7 @@ export function configForNewGame(
     engine: SAVE_VERSION,
     seed: Math.floor(rng() * 2 ** 31),
     size: sizeForPlayers(total),
+    mapType,
     winMode,
     difficulty,
     tribes: pool.slice(0, total),

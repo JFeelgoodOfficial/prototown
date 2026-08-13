@@ -1,5 +1,5 @@
 import type { GameState, PlayerState } from "./state";
-import { idx, inBounds, citiesOf, unitsOf, tileAt } from "./state";
+import { idx, isPlayable, citiesOf, unitsOf, tileAt } from "./state";
 
 /** Sight radius from a position: 2 from mountains, else 1. */
 function sightRadius(state: GameState, x: number, y: number): number {
@@ -13,7 +13,7 @@ export function computeVisibility(state: GameState, player: PlayerState): void {
       for (let dx = -r; dx <= r; dx++) {
         const x = cx + dx;
         const y = cy + dy;
-        if (inBounds(state, x, y)) player.explored[idx(state, x, y)] = 1;
+        if (isPlayable(state, x, y)) player.explored[idx(state, x, y)] = 1;
       }
   };
   for (const u of unitsOf(state, player.id)) reveal(u.x, u.y, sightRadius(state, u.x, u.y));
@@ -35,7 +35,7 @@ export function watchedMask(state: GameState, player: PlayerState): number[] {
       for (let dx = -r; dx <= r; dx++) {
         const x = cx + dx;
         const y = cy + dy;
-        if (inBounds(state, x, y)) mask[idx(state, x, y)] = 1;
+        if (isPlayable(state, x, y)) mask[idx(state, x, y)] = 1;
       }
   };
   for (const u of unitsOf(state, player.id)) mark(u.x, u.y, sightRadius(state, u.x, u.y));

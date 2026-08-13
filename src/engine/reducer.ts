@@ -10,7 +10,7 @@ import {
   hasTech,
   neighbors,
   idx,
-  inBounds,
+  isPlayable,
   dist,
 } from "./state";
 import type { Action } from "./actions";
@@ -253,6 +253,7 @@ export function applyAction(prev: GameState, action: Action): GameState {
       const deadCityIds = new Set<number>();
       for (const [x, y] of blast) {
         const tile = tileAt(state, x, y);
+        if (tile.terrain === "void") continue;
         if (tile.cityHere !== null) deadCityIds.add(tile.cityHere);
         tile.terrain = "crater";
         tile.resource = null;
@@ -330,7 +331,7 @@ function applyReward(state: GameState, city: City, reward: string): void {
         const y = city.y + nextInt(state, 9) - 4;
         for (let dy = -1; dy <= 1; dy++)
           for (let dx = -1; dx <= 1; dx++) {
-            if (inBounds(state, x + dx, y + dy)) player.explored[idx(state, x + dx, y + dy)] = 1;
+            if (isPlayable(state, x + dx, y + dy)) player.explored[idx(state, x + dx, y + dy)] = 1;
           }
       }
       break;
@@ -431,7 +432,7 @@ function claimRuin(state: GameState, unit: Unit, tile: Tile): void {
         for (let dx = -RUIN_MAP_RADIUS; dx <= RUIN_MAP_RADIUS; dx++) {
           const x = unit.x + dx;
           const y = unit.y + dy;
-          if (inBounds(state, x, y)) player.explored[idx(state, x, y)] = 1;
+          if (isPlayable(state, x, y)) player.explored[idx(state, x, y)] = 1;
         }
       }
       label = "Maps found";

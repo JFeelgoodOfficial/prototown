@@ -53,6 +53,22 @@ describe("save / load", () => {
     expect(restored!.state.nukeLaunched).toBe(false);
   });
 
+  it("loads version 4 saves, which predate map shapes", () => {
+    const s = newGame({ seed: 12, size: 11, tribes: ["korvani", "thornwood"], winMode: "domination" });
+    const bare = JSON.parse(JSON.stringify(s));
+    delete bare.mapType;
+    const restored = deserialize(JSON.stringify({ version: 4, savedAt: 1, difficulty: "normal", state: bare }));
+    expect(restored).not.toBeNull();
+    expect(restored!.state.mapType).toBe("square");
+  });
+
+  it("roundtrips a circle game with its map type", () => {
+    const s = newGame({ seed: 3, size: 11, mapType: "circle", tribes: ["meridia", "ashfen"], winMode: "domination" });
+    const restored = deserialize(serialize(s, 0, "normal"));
+    expect(restored!.state.mapType).toBe("circle");
+    expect(JSON.stringify(restored!.state)).toBe(JSON.stringify(s));
+  });
+
   it("rejects unknown versions and junk", () => {
     expect(deserialize("not json")).toBeNull();
     expect(deserialize(JSON.stringify({ version: 999, state: {} }))).toBeNull();

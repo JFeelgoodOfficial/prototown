@@ -8,7 +8,16 @@ import UnitPortrait from "./UnitPortrait";
 import SavesDialog from "./SavesDialog";
 import OnlineMenu from "./OnlineMenu";
 import { onlineEnabled } from "../net/env";
-import type { GameState, WinMode } from "../engine/state";
+import type { GameState, MapType, WinMode } from "../engine/state";
+
+const MAP_LABELS: Record<MapType, string> = {
+  square: "Square — the classic board",
+  circle: "Circle — a round world",
+  continents: "Continents — cross the ocean to meet your rivals",
+  globe: "Globe — a spinning world with no edges",
+};
+/** Shapes offered on the setup screen. */
+const MAP_CHOICES: MapType[] = ["square", "circle"];
 
 /** The new-game setup, reached from Start on the title screen. */
 export default function MainMenu({ onBack }: { onBack?: () => void }) {
@@ -17,6 +26,7 @@ export default function MainMenu({ onBack }: { onBack?: () => void }) {
   const [opponents, setOpponents] = useState(1);
   const [difficulty, setDifficulty] = useState<Difficulty>("normal");
   const [winMode, setWinMode] = useState<WinMode>("domination");
+  const [mapType, setMapType] = useState<MapType>("square");
   const [savesOpen, setSavesOpen] = useState(false);
   const [onlineOpen, setOnlineOpen] = useState(false);
   // Read storage once per menu mount; the in-memory game takes priority when present.
@@ -35,7 +45,7 @@ export default function MainMenu({ onBack }: { onBack?: () => void }) {
     const others = TRIBES.filter((t) => t.id !== tribeId).map((t) => t.id);
     const tribes = [tribeId, ...others.slice(0, opponents)];
     const seed = Math.floor(Math.random() * 2 ** 31);
-    game.startNewGame({ seed, size, tribes, winMode }, difficulty);
+    game.startNewGame({ seed, size, mapType, tribes, winMode }, difficulty);
   };
 
   return (
@@ -90,6 +100,10 @@ export default function MainMenu({ onBack }: { onBack?: () => void }) {
 
           <Section label="Opponents">
             <Choice options={[1, 2, 3]} value={opponents} onPick={setOpponents} render={(n) => `${n} rival${n > 1 ? "s" : ""}`} />
+          </Section>
+
+          <Section label="Map">
+            <Choice options={MAP_CHOICES} value={mapType} onPick={setMapType} render={(m) => MAP_LABELS[m]} />
           </Section>
 
           <Section label="Difficulty">

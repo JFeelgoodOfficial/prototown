@@ -13,7 +13,7 @@ import {
   anchorZoom,
   type Camera,
 } from "../render/camera";
-import { playerById, unitAt, inBounds } from "../engine/state";
+import { playerById, unitAt, isPlayable } from "../engine/state";
 import { watchedMask } from "../engine/fog";
 import TopBar from "./TopBar";
 import SidePanel from "./SidePanel";
@@ -300,7 +300,7 @@ export default function GameScreen() {
         return;
       }
       const g = toGrid(e.clientX, e.clientY);
-      hoverRef.current = s && inBounds(s, g[0], g[1]) ? g : null;
+      hoverRef.current = s && isPlayable(s, g[0], g[1]) ? g : null;
     };
 
     const onPointerUp = (e: PointerEvent) => {
@@ -498,7 +498,7 @@ function Minimap({
     if (!s || !cam) return;
     const rect = e.currentTarget.getBoundingClientRect();
     const [gx, gy] = minimapToGrid(s.size, e.clientX - rect.left, e.clientY - rect.top, rect.width, rect.height);
-    if (!inBounds(s, gx, gy)) return;
+    if (!isPlayable(s, gx, gy)) return;
     const [wx, wy] = gridToWorld(gx, gy);
     cam.x = wx;
     cam.y = wy;
@@ -563,7 +563,7 @@ function MapButton({ label, title, onPress }: { label: string; title: string; on
 
 function handleClick([x, y]: [number, number]): void {
   const s = controller.state;
-  if (!s || controller.aiBusy || !inBounds(s, x, y)) return;
+  if (!s || controller.aiBusy || !isPlayable(s, x, y)) return;
   if (controller.legal.some((a) => a.type === "CHOOSE_REWARD")) return; // modal open
 
   const selected = controller.selectedUnitId;

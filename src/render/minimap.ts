@@ -47,6 +47,7 @@ export function renderMinimap(
       const i = idx(state, x, y);
       const seen = view.revealAll || view.explored[i] === 1;
       const tile = state.tiles[i];
+      if (tile.terrain === "void") continue;
       let color = UNSEEN;
       if (seen) {
         color = TERRAIN_DOT[tile.terrain] ?? UNSEEN;
@@ -93,7 +94,13 @@ export function renderMinimap(
 
   ctx.strokeStyle = "rgba(255,255,255,0.18)";
   ctx.lineWidth = 1;
-  ctx.strokeRect(originX, originY, cell * state.size, cell * state.size);
+  if (state.mapType === "circle") {
+    ctx.beginPath();
+    ctx.arc(originX + (cell * state.size) / 2, originY + (cell * state.size) / 2, (cell * state.size) / 2, 0, Math.PI * 2);
+    ctx.stroke();
+  } else {
+    ctx.strokeRect(originX, originY, cell * state.size, cell * state.size);
+  }
 }
 
 /** The camera's world rect, projected back to grid space as a box. */

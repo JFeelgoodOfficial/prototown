@@ -1,6 +1,6 @@
 import type { UnitType } from "../data/units";
 
-export type TerrainType = "field" | "forest" | "mountain" | "water" | "ocean" | "crater";
+export type TerrainType = "field" | "forest" | "mountain" | "water" | "ocean" | "crater" | "void";
 export type ResourceType = "fruit" | "animal" | "fish" | "whale" | "metal" | "crop";
 export type BuildingType = "lumber_hut" | "farm" | "mine" | "port";
 
@@ -72,11 +72,15 @@ export interface PlayerState {
 
 export type WinMode = "domination" | "perfection";
 
+/** Shape of the world. "void" tiles pad non-square shapes inside the square array. */
+export type MapType = "square" | "circle" | "continents" | "globe";
+
 export interface GameState {
   seed: number;
   /** PRNG cursor — advanced by every random draw so replays are deterministic */
   rngState: number;
   size: number;
+  mapType: MapType;
   turn: number;
   currentPlayerId: number;
   tiles: Tile[];
@@ -116,6 +120,11 @@ export function inBounds(state: Pick<GameState, "size">, x: number, y: number): 
 
 export function tileAt(state: GameState, x: number, y: number): Tile {
   return state.tiles[idx(state, x, y)];
+}
+
+/** In bounds and not an off-map void tile. */
+export function isPlayable(state: Pick<GameState, "size" | "tiles">, x: number, y: number): boolean {
+  return inBounds(state, x, y) && state.tiles[y * state.size + x].terrain !== "void";
 }
 
 export function unitAt(state: GameState, x: number, y: number): Unit | undefined {

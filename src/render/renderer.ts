@@ -125,6 +125,7 @@ export function render(ctx: CanvasRenderingContext2D, state: GameState, view: Vi
     const i = idx(state, x, y);
     const explored = view.revealAll || view.explored[i] === 1;
     const tile = state.tiles[i];
+    if (tile.terrain === "void") continue;
     const [wx, wy0] = gridToWorld(x, y);
     if (offscreen(wx, wy0)) continue;
     const wy = topOf(x, y);
@@ -442,7 +443,12 @@ function waterMaskAt(state: GameState, x: number, y: number): number {
   EDGE_ORDER.forEach(([dx, dy], i) => {
     const nx = x + dx;
     const ny = y + dy;
-    if (!inBounds(state, nx, ny) || isWaterTerrain(state.tiles[idx(state, nx, ny)].terrain)) mask |= 1 << i;
+    if (
+      !inBounds(state, nx, ny) ||
+      state.tiles[idx(state, nx, ny)].terrain === "void" ||
+      isWaterTerrain(state.tiles[idx(state, nx, ny)].terrain)
+    )
+      mask |= 1 << i;
   });
   return mask;
 }

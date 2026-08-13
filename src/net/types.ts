@@ -1,4 +1,4 @@
-import type { WinMode } from "../engine/state";
+import type { MapType, WinMode } from "../engine/state";
 import type { Action } from "../engine/actions";
 import type { Difficulty } from "../game/difficulty";
 
@@ -12,6 +12,8 @@ export interface OnlineConfig {
   engine: number;
   seed: number;
   size: number;
+  /** absent in configs stored before map shapes existed — treat as "square" */
+  mapType?: MapType;
   winMode: WinMode;
   difficulty: Difficulty;
   /** tribe per seat; the first humanSeats are humans, the rest AI */

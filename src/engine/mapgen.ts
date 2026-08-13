@@ -1,4 +1,4 @@
-import type { GameState, PlayerState, Tile, TerrainType, City, Unit } from "./state";
+import type { GameState, PlayerState, Tile, TerrainType, City, Unit, MapType } from "./state";
 import { idx, inBounds, neighbors, dist } from "./state";
 import { mulberry32, nextInt } from "./rng";
 import { tribeById } from "../data/tribes";
@@ -14,6 +14,15 @@ export interface NewGameOptions {
   winMode: WinMode;
   /** How many leading seats are humans. Defaults to 1 (local play). */
   humanSeats?: number;
+  /** World shape. Defaults to "square". */
+  mapType?: MapType;
+}
+
+/** Tiles of a circle map inside the disc inscribed in the size×size square. */
+export function insideCircle(size: number, x: number, y: number): boolean {
+  const c = (size - 1) / 2;
+  const r2 = (size / 2 - 0.5) ** 2 + 0.5;
+  return (x - c) ** 2 + (y - c) ** 2 <= r2;
 }
 
 /** Smooth value noise in [0,1] from a coarse random lattice. */
@@ -44,11 +53,19 @@ function valueNoise(rand: () => number, size: number, freq: number): number[] {
 }
 
 /** Pick capital positions greedily maximizing the minimum pairwise distance. */
-function placeCapitals(rand: () => number, size: number, count: number): Array<[number, number]> {
+function placeCapitals(
+  rand: () => number,
+  size: number,
+  count: number,
+  valid?: (x: number, y: number) => boolean,
+): Array<[number, number]> {
   const margin = 2;
   const candidates: Array<[number, number]> = [];
   for (let y = margin; y < size - margin; y++)
-    for (let x = margin; x < size - margin; x++) candidates.push([x, y]);
+    for (let x = margin; x < size - margin; x++) {
+      if (valid && !valid(x, y)) continue;
+      candidates.push([x, y]);
+    }
 
   const picks: Array<[number, number]> = [];
   picks.push(candidates[Math.floor(rand() * candidates.length)]);
@@ -69,10 +86,19 @@ function placeCapitals(rand: () => number, size: number, count: number): Array<[
 
 export function newGame(opts: NewGameOptions): GameState {
   const { seed, size, tribes, winMode } = opts;
+  const mapType = opts.mapType ?? "square";
   if (tribes.length < 2 || tribes.length > 4) throw new Error("2-4 tribes");
   const rand = mulberry32(seed);
 
-  const capitals = placeCapitals(rand, size, tribes.length);
+  // On a circle map, capitals stay a full tile inside the rim so every
+  // neighbour of a capital is playable.
+  const capitalOk =
+    mapType === "circle"
+      ? (x: number, y: number) =>
+          insideCircle(size, x, y) &&
+          [-1, 0, 1].every((dy) => [-1, 0, 1].every((dx) => insideCircle(size, x + dx, y + dy)))
+      : undefined;
+  const capitals = placeCapitals(rand, size, tribes.length, capitalOk);
 
   // Terrain from two noise fields: elevation decides water/land/mountain,
   // moisture decides forest. Tribe biases tilt generation near each capital.
@@ -82,6 +108,10 @@ export function newGame(opts: NewGameOptions): GameState {
   const tiles: Tile[] = [];
   for (let y = 0; y < size; y++) {
     for (let x = 0; x < size; x++) {
+      if (mapType === "circle" && !insideCircle(size, x, y)) {
+        tiles.push({ x, y, terrain: "void", resource: null, building: null, cityId: null, village: false, cityHere: null, ruin: false });
+        continue;
+      }
       let e = elevation[y * size + x];
       let m = moisture[y * size + x];
 
@@ -111,6 +141,7 @@ export function newGame(opts: NewGameOptions): GameState {
     seed,
     rngState: seed ^ 0x9e3779b9,
     size,
+    mapType,
     turn: 1,
     currentPlayerId: 0,
     tiles,
@@ -137,8 +168,15 @@ export function newGame(opts: NewGameOptions): GameState {
     }
   }
 
-  // Guarantee land reachability between capitals: carve field corridors
-  carveCorridors(state, capitals);
+  // Guarantee land reachability between capitals: carve field corridors.
+  // On a circle map, route via the centre tile — each x-then-y leg only ever
+  // moves a coordinate toward the centre, so the whole path stays in the disc.
+  if (mapType === "circle") {
+    const c: [number, number] = [Math.floor(size / 2), Math.floor(size / 2)];
+    for (const cap of capitals) carveCorridors(state, [cap, c]);
+  } else {
+    carveCorridors(state, capitals);
+  }
 
   // Villages: ~1 per 20 tiles, on land, spaced away from capitals and each other
   const villageTarget = Math.floor((size * size) / 20);
@@ -271,6 +309,7 @@ export function claimTerritory(state: GameState, city: City): void {
       const y = city.y + dy;
       if (!inBounds(state, x, y)) continue;
       const t = state.tiles[idx(state, x, y)];
+      if (t.terrain === "void") continue;
       if (t.cityId === null) t.cityId = city.id;
     }
   }
@@ -287,6 +326,7 @@ function carveCorridors(state: GameState, capitals: Array<[number, number]>): vo
       if (x !== bx) x += Math.sign(bx - x);
       else y += Math.sign(by - y);
       const t = state.tiles[idx(state, x, y)];
+      if (t.terrain === "void") continue;
       if (t.terrain === "water" || t.terrain === "ocean") t.terrain = "field";
     }
   }
