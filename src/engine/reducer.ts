@@ -1,4 +1,4 @@
-import type { GameState, Unit, City, Tile, RuinRewardKind } from "./state";
+import type { GameState, Unit, City, Tile, RuinRewardKind, PlayerState } from "./state";
 import {
   cloneState,
   tileAt,
@@ -13,6 +13,7 @@ import {
   isPlayable,
   disk,
   dist,
+  planetOf,
 } from "./state";
 import type { Action } from "./actions";
 import { resolveCombat, unitRange } from "./combat";
@@ -25,7 +26,7 @@ import { addPopulation, playerIncome } from "./economy";
 import { nextInt } from "./rng";
 import { UNITS, NAVAL } from "../data/units";
 import { TERRAIN } from "../data/terrain";
-import { techCost, TECHS } from "../data/techs";
+import { techCost, TECHS, techAvailable } from "../data/techs";
 import { tribeById } from "../data/tribes";
 import {
   HARVEST_DEFS,
@@ -40,6 +41,8 @@ import {
   RUIN_STARS,
   RUIN_POPULATION,
   RUIN_MAP_RADIUS,
+  SURVEY_SITES,
+  SURVEY_RADIUS,
 } from "../data/constants";
 
 /**
@@ -128,6 +131,7 @@ export function applyAction(prev: GameState, action: Action): GameState {
           walls: false,
           workshop: false,
           parks: 0,
+          spaceStation: false,
           borderRadius: 1,
           pendingReward: null,
         };
@@ -182,6 +186,29 @@ export function applyAction(prev: GameState, action: Action): GameState {
       break;
     }
 
+    case "LAUNCH": {
+      const unit = mustUnit(state, action.unitId);
+      unit.embarked = "orbit";
+      unit.moved = true;
+      unit.attacked = true;
+      unit.fortified = false;
+      break;
+    }
+
+    case "LAND": {
+      const unit = mustUnit(state, action.unitId);
+      unit.embarked = null;
+      unit.x = action.x;
+      unit.y = action.y;
+      unit.moved = true;
+      unit.attacked = true;
+      unit.fortified = false;
+      const to = tileAt(state, action.x, action.y);
+      if (to.ruin) claimRuin(state, unit, to);
+      computeVisibility(state, player);
+      break;
+    }
+
     case "HARVEST": {
       const tile = tileAt(state, action.x, action.y);
       if (!tile.resource || !(tile.resource in HARVEST_DEFS)) throw new Error("no harvestable resource");
@@ -232,7 +259,10 @@ export function applyAction(prev: GameState, action: Action): GameState {
       const city = cityById(state, action.cityId)!;
       player.stars -= CITY_IMPROVEMENTS[action.improvement].cost;
       if (action.improvement === "walls") city.walls = true;
-      else city.parks += 1;
+      else if (action.improvement === "station") {
+        city.spaceStation = true;
+        orbitalSurvey(state, player, city);
+      } else city.parks += 1;
       break;
     }
 
@@ -390,7 +420,10 @@ function claimRuin(state: GameState, unit: Unit, tile: Tile): void {
   const canPromote = !unit.veteran && unit.type !== "giant";
   const ownCities = citiesOf(state, player.id);
   const researchable = TECHS.filter(
-    (t) => !player.techs.includes(t.id) && (!t.requires || player.techs.includes(t.requires)),
+    (t) =>
+      techAvailable(state.mapType, t.id) &&
+      !player.techs.includes(t.id) &&
+      (!t.requires || player.techs.includes(t.requires)),
   );
 
   const options: RuinRewardKind[] = ["stars", "map"];
@@ -436,6 +469,24 @@ function claimRuin(state: GameState, unit: Unit, tile: Tile): void {
     }
   }
   state.lastRuinReward = { kind, x: unit.x, y: unit.y, playerId: player.id, label };
+}
+
+/**
+ * A new Space Station photographs the twin world from orbit: a few survey
+ * sites are revealed so the first landings have somewhere to aim. Draws come
+ * from the state RNG, so replays survey the same places.
+ */
+function orbitalSurvey(state: GameState, player: PlayerState, city: City): void {
+  const w = state.size * 6;
+  const otherPlanet = planetOf(state, city.x) === 0 ? 1 : 0;
+  for (let i = 0; i < SURVEY_SITES; i++) {
+    const local = nextInt(state, w * state.size);
+    const x = (local % w) + otherPlanet * w;
+    const y = Math.floor(local / w);
+    for (const [nx, ny] of disk(state, x, y, SURVEY_RADIUS)) {
+      if (isPlayable(state, nx, ny)) player.explored[idx(state, nx, ny)] = 1;
+    }
+  }
 }
 
 function findSpawnSpot(state: GameState, city: City): [number, number] | null {

@@ -1,4 +1,5 @@
 import { PHILOSOPHY_DISCOUNT } from "./constants";
+import type { MapType } from "../engine/state";
 
 export interface TechDef {
   id: string;
@@ -49,9 +50,19 @@ export const TECHS: TechDef[] = [
   { id: "spiritualism", name: "Spiritualism", tier: 3, requires: "archery", blurb: "Build Grand Parks (⭐12)." },
   { id: "rocketry", name: "Rocketry", tier: 4, requires: "mathematics", blurb: "Train Missile Launchers." },
   { id: "atomic_theory", name: "Atomic Theory", tier: 4, requires: "rocketry", blurb: "Launch one nuke — once per game, for everyone." },
+  { id: "space_travel", name: "Space Travel", tier: 4, requires: "rocketry", blurb: "Build Spaceports and Space Stations — reach the twin world." },
 ];
 
 export const TECH_BY_ID: Record<string, TechDef> = Object.fromEntries(TECHS.map((t) => [t.id, t]));
+
+/**
+ * Whether a tech exists on this map shape. Space Travel is pointless with
+ * nowhere to fly to, so it is offered — by research and by ruins — only on
+ * twin-globe maps.
+ */
+export function techAvailable(mapType: MapType, techId: string): boolean {
+  return techId !== "space_travel" || mapType === "twin_globes";
+}
 
 /**
  * Research cost. Mirrors the reference implementation: cost scales with

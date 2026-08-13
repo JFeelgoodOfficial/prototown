@@ -3,7 +3,7 @@ import { sphereTopology } from "./topology";
 
 export type TerrainType = "field" | "forest" | "mountain" | "water" | "ocean" | "crater" | "void";
 export type ResourceType = "fruit" | "animal" | "fish" | "whale" | "metal" | "crop";
-export type BuildingType = "lumber_hut" | "farm" | "mine" | "port";
+export type BuildingType = "lumber_hut" | "farm" | "mine" | "port" | "spaceport";
 
 export interface Tile {
   x: number;
@@ -34,6 +34,8 @@ export interface City {
   walls: boolean;
   workshop: boolean;
   parks: number;
+  /** orbital space station: lets units launch from this city's spaceport */
+  spaceStation: boolean;
   /** territory radius: 1 normally, 2 after border growth */
   borderRadius: 1 | 2;
   /** pending level-up reward the owner must pick: [optionA, optionB] */
@@ -56,8 +58,8 @@ export interface Unit {
   attacked: boolean;
   /** dug in: defends better, until it moves or attacks */
   fortified: boolean;
-  /** null on land; otherwise the naval form carrying this unit */
-  embarked: "raft" | "ship" | null;
+  /** null on land; the naval form carrying this unit; or "orbit" between launch and landing */
+  embarked: "raft" | "ship" | "orbit" | null;
 }
 
 export interface PlayerState {
@@ -74,7 +76,7 @@ export interface PlayerState {
 export type WinMode = "domination" | "perfection";
 
 /** Shape of the world. "void" tiles pad non-square shapes inside the square array. */
-export type MapType = "square" | "circle" | "continents" | "globe";
+export type MapType = "square" | "circle" | "continents" | "globe" | "twin_globes";
 
 export interface GameState {
   seed: number;
@@ -114,13 +116,41 @@ export interface RuinReward {
 /**
  * The grid the tiles array is laid out on. Flat maps are size×size; a globe
  * is the six n×n cube faces side by side — one row-major grid 6n wide and
- * n tall, where `size` is the face resolution n. All indexing goes through
- * these so nothing else needs to know which world shape it is on.
+ * n tall, where `size` is the face resolution n. Twin globes are two such
+ * planets side by side in one 12n-wide grid — planet 0 in columns [0, 6n),
+ * planet 1 in [6n, 12n) — with no adjacency between them. All indexing goes
+ * through these so nothing else needs to know which world shape it is on.
  */
 export type Grid = Pick<GameState, "size" | "mapType">;
 
+/** Cube-sphere world(s): adjacency comes from sphereTopology, not the flat grid. */
+export function isGlobeGrid(state: Grid): boolean {
+  return state.mapType === "globe" || state.mapType === "twin_globes";
+}
+
+export function planetCount(state: Grid): number {
+  return state.mapType === "twin_globes" ? 2 : 1;
+}
+
+/** Which planet a column belongs to. Always 0 on single-world maps. */
+export function planetOf(state: Grid, x: number): number {
+  return state.mapType === "twin_globes" && x >= state.size * 6 ? 1 : 0;
+}
+
+/** Topology-local tile index of (x, y) on its own planet's cube-sphere. */
+function topoIdx(state: Grid, x: number, y: number): number {
+  const w = state.size * 6;
+  return y * w + (x - planetOf(state, x) * w);
+}
+
+/** Grid coordinates of a topology-local tile index on the given planet. */
+function topoCoords(state: Grid, planet: number, i: number): [number, number] {
+  const w = state.size * 6;
+  return [(i % w) + planet * w, Math.floor(i / w)];
+}
+
 export function gridWidth(state: Grid): number {
-  return state.mapType === "globe" ? state.size * 6 : state.size;
+  return isGlobeGrid(state) ? state.size * 6 * planetCount(state) : state.size;
 }
 
 export function gridHeight(state: Grid): number {
@@ -186,8 +216,11 @@ export function hasTech(player: PlayerState, techId: string | null): boolean {
 /** All 8 neighbours (the reference game uses Moore adjacency). On a globe
     the adjacency folds across cube-face edges instead of stopping. */
 export function neighbors(state: Grid, x: number, y: number): Array<[number, number]> {
-  if (state.mapType === "globe") {
-    return sphereTopology(state.size).neighborTable[idx(state, x, y)].map((i) => coordsOf(state, i));
+  if (isGlobeGrid(state)) {
+    const planet = planetOf(state, x);
+    return sphereTopology(state.size).neighborTable[topoIdx(state, x, y)].map((i) =>
+      topoCoords(state, planet, i),
+    );
   }
   const out: Array<[number, number]> = [];
   for (let dy = -1; dy <= 1; dy++)
@@ -203,10 +236,12 @@ export function neighbors(state: Grid, x: number, y: number): Array<[number, num
 /**
  * Range and adjacency metric: Chebyshev distance on flat maps, where it is
  * exactly the number of 8-way steps; graph distance in 8-way steps on a globe.
+ * Tiles on different planets are unreachable on foot: Infinity.
  */
 export function dist(state: Grid, ax: number, ay: number, bx: number, by: number): number {
-  if (state.mapType === "globe") {
-    return sphereTopology(state.size).dist(idx(state, ax, ay), idx(state, bx, by));
+  if (isGlobeGrid(state)) {
+    if (planetOf(state, ax) !== planetOf(state, bx)) return Infinity;
+    return sphereTopology(state.size).dist(topoIdx(state, ax, ay), topoIdx(state, bx, by));
   }
   return Math.max(Math.abs(ax - bx), Math.abs(ay - by));
 }
@@ -217,11 +252,12 @@ export function dist(state: Grid, ax: number, ay: number, bx: number, by: number
  * cube-face edges.
  */
 export function disk(state: Grid, x: number, y: number, r: number): Array<[number, number]> {
-  if (state.mapType === "globe") {
+  if (isGlobeGrid(state)) {
+    const planet = planetOf(state, x);
     const topo = sphereTopology(state.size);
-    const d = topo.distField(idx(state, x, y));
+    const d = topo.distField(topoIdx(state, x, y));
     const out: Array<[number, number]> = [];
-    for (let i = 0; i < topo.count; i++) if (d[i] <= r) out.push(coordsOf(state, i));
+    for (let i = 0; i < topo.count; i++) if (d[i] <= r) out.push(topoCoords(state, planet, i));
     return out;
   }
   const out: Array<[number, number]> = [];

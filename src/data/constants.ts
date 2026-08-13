@@ -61,6 +61,7 @@ export const BUILDING_DEFS = {
   farm: { cost: 5, pop: 2, tech: "farming", terrain: "field", needsResource: "crop" },
   mine: { cost: 5, pop: 2, tech: "mining", terrain: "mountain", needsResource: "metal" },
   port: { cost: 7, pop: 1, tech: "sailing", terrain: "water" },
+  spaceport: { cost: 10, pop: 1, tech: "space_travel", terrain: "field" },
 } as const;
 
 /**
@@ -71,6 +72,7 @@ export const BUILDING_DEFS = {
 export const CITY_IMPROVEMENTS = {
   walls: { cost: 8, tech: "construction", name: "City Walls" },
   park: { cost: 12, tech: "spiritualism", name: "Grand Park" },
+  station: { cost: 15, tech: "space_travel", name: "Space Station" },
 } as const;
 export type CityImprovement = keyof typeof CITY_IMPROVEMENTS;
 
@@ -85,6 +87,12 @@ export const REWARD_STARS_AMOUNT = 5;
 export const REWARD_POPULATION_AMOUNT = 3;
 
 export const CITY_UNIT_CAPACITY_BASE = 1; // capacity = level + 1
+
+// Space travel (twin-globe maps)
+/** Survey sites photographed on the other planet when a Space Station is built. */
+export const SURVEY_SITES = 3;
+/** Radius revealed around each survey site. */
+export const SURVEY_RADIUS = 2;
 
 // Ruins: one per ~45 tiles, claimed by walking a unit in
 export const RUIN_TILES_PER = 45;

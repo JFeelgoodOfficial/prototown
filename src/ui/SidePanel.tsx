@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useGame } from "./store";
 import { unitById, tileAt, cityById, unitAt, type GameState } from "../engine/state";
-import { UNITS, NAVAL, type UnitType } from "../data/units";
+import { UNITS, NAVAL, ORBIT, type UnitType } from "../data/units";
 import { HARVEST_DEFS, CITY_IMPROVEMENTS } from "../data/constants";
 import { cityIncome, popForNextLevel, cityUnitCount, cityCapacity } from "../engine/economy";
 import UnitPortrait from "./UnitPortrait";
@@ -16,15 +16,21 @@ export default function SidePanel() {
   const unit = game.selectedUnitId !== null ? unitById(s, game.selectedUnitId) : undefined;
   if (unit) {
     const def = UNITS[unit.type];
+    const inOrbit = unit.embarked === "orbit";
+    // Landing is done by tapping a lit tile on the other world, so the LAND
+    // actions themselves (one per landing site) never render as buttons.
     const acts = game.legal.filter(
-      (a) => "unitId" in a && a.unitId === unit.id && a.type !== "MOVE" && a.type !== "ATTACK",
+      (a) =>
+        "unitId" in a && a.unitId === unit.id && a.type !== "MOVE" && a.type !== "ATTACK" && a.type !== "LAND",
     );
+    const mode =
+      unit.embarked === null ? null : unit.embarked === "orbit" ? ORBIT : NAVAL[unit.embarked];
     return (
-      <Panel title={`${unit.embarked ? NAVAL[unit.embarked].name + " · " : ""}${def.name}${unit.veteran ? " ★" : ""}`}>
+      <Panel title={`${mode ? mode.name + " · " : ""}${def.name}${unit.veteran ? " ★" : ""}`}>
         <div className="flex items-end gap-3">
           <UnitPortrait
             tribeId={s.players[unit.ownerId].tribeId}
-            type={unit.embarked ?? unit.type}
+            type={unit.embarked === "orbit" ? unit.type : (unit.embarked ?? unit.type)}
             width={64}
             height={68}
             className="shrink-0"
@@ -37,6 +43,11 @@ export default function SidePanel() {
               {unit.moved && unit.attacked ? "Done for this turn" : unit.moved ? "Has moved" : "Ready"}
               {unit.fortified && <span className="text-sky-300"> · Dug in</span>}
             </div>
+            {inOrbit && (
+              <div className="text-xs text-amber-300">
+                In orbit — tap a lit tile on the other world to land.
+              </div>
+            )}
           </div>
         </div>
         <div className="mt-2 flex flex-wrap gap-2">
@@ -223,6 +234,8 @@ function labelFor(a: Action, s: GameState): string {
       return `${UNITS[a.unitType as UnitType].name} (⭐${UNITS[a.unitType as UnitType].cost})`;
     case "LAUNCH_NUKE":
       return "☢ Launch Nuke";
+    case "LAUNCH":
+      return "🚀 Launch to orbit";
     default:
       return a.type;
   }

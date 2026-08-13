@@ -11,10 +11,14 @@
  * computed across cube-face seams, floating combat text and missile/nuke
  * effects are not shown (unit HP bars still tell the story), and props are
  * flattened to at most two sprites per tile.
+ *
+ * Twin-globe maps render both planets in this one scene, spaced along +X and
+ * sharing the topology and texture atlas; the camera slides sideways to park
+ * in front of the active planet, and only that planet rotates under drags.
  */
 import * as THREE from "three";
 import type { GameState, Tile, Unit } from "../../engine/state";
-import { idx, coordsOf, tileCount, cityById } from "../../engine/state";
+import { idx, coordsOf, tileCount, cityById, planetCount, planetOf, gridWidth } from "../../engine/state";
 import { sphereTopology } from "../../engine/topology";
 import {
   diamondPath,
@@ -38,6 +42,8 @@ import { TILE_W, TILE_H } from "../iso";
 const R = 100;
 const MIN_DIST = R * 1.45;
 const MAX_DIST = R * 3.4;
+/** Centre-to-centre gap between planets on twin-globe maps. */
+const PLANET_SPACING = R * 2.6;
 
 const FOG_FILL = "#333f57";
 const FOG_EDGE = "#232c40";
@@ -57,8 +63,9 @@ export class GlobeRenderer {
   private renderer: THREE.WebGLRenderer;
   private scene = new THREE.Scene();
   private camera: THREE.PerspectiveCamera;
-  private globe = new THREE.Group();
-  private tileMesh: THREE.Mesh;
+  /** One rotatable group per planet, planet p centred at x = p * PLANET_SPACING. */
+  private globes: THREE.Group[] = [];
+  private tileMeshes: THREE.Mesh[] = [];
   private atlas: HTMLCanvasElement;
   private atlasCtx: CanvasRenderingContext2D;
   private atlasTex: THREE.CanvasTexture;
@@ -66,6 +73,8 @@ export class GlobeRenderer {
   private spritePool: THREE.Sprite[] = [];
   private texByKey = new Map<string, THREE.Texture>();
   private tileDiag: number;
+  /** The planet the camera is parked in front of. Always 0 on single globes. */
+  activePlanet = 0;
   needsRender = true;
 
   constructor(
@@ -73,6 +82,9 @@ export class GlobeRenderer {
     private state: GameState,
   ) {
     const topo = sphereTopology(state.size);
+    const planets = planetCount(state);
+    const W = gridWidth(state);
+    const w6 = state.size * 6;
 
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false });
     this.renderer.setClearColor(new THREE.Color("#0b1220"));
@@ -90,37 +102,46 @@ export class GlobeRenderer {
     this.atlasTex.generateMipmaps = false;
     this.atlasTex.minFilter = THREE.LinearFilter;
 
-    // one quad (two triangles) per tile, corners on the sphere
-    const positions = new Float32Array(topo.count * 4 * 3);
-    const uvs = new Float32Array(topo.count * 4 * 2);
-    const indices: number[] = [];
-    for (let i = 0; i < topo.count; i++) {
-      const corners = topo.cornersOf(i);
-      for (let c = 0; c < 4; c++) {
-        positions.set(
-          [corners[c][0] * R, corners[c][1] * R, corners[c][2] * R],
-          (i * 4 + c) * 3,
-        );
+    // per planet: one quad (two triangles) per tile, corners on the sphere.
+    // All planets share the topology and the atlas; only the UVs differ,
+    // pointing each planet's quads at its own block of atlas cells.
+    for (let p = 0; p < planets; p++) {
+      const positions = new Float32Array(topo.count * 4 * 3);
+      const uvs = new Float32Array(topo.count * 4 * 2);
+      const indices: number[] = [];
+      for (let i = 0; i < topo.count; i++) {
+        const corners = topo.cornersOf(i);
+        for (let c = 0; c < 4; c++) {
+          positions.set(
+            [corners[c][0] * R, corners[c][1] * R, corners[c][2] * R],
+            (i * 4 + c) * 3,
+          );
+        }
+        const globalTile = Math.floor(i / w6) * W + (i % w6) + p * w6;
+        const [top, right, bottom, left] = cellDiamondUv(globalTile);
+        uvs.set(top, (i * 4 + 0) * 2);
+        uvs.set(right, (i * 4 + 1) * 2);
+        uvs.set(bottom, (i * 4 + 2) * 2);
+        uvs.set(left, (i * 4 + 3) * 2);
+        indices.push(i * 4, i * 4 + 1, i * 4 + 2, i * 4, i * 4 + 2, i * 4 + 3);
       }
-      const [top, right, bottom, left] = cellDiamondUv(i);
-      uvs.set(top, (i * 4 + 0) * 2);
-      uvs.set(right, (i * 4 + 1) * 2);
-      uvs.set(bottom, (i * 4 + 2) * 2);
-      uvs.set(left, (i * 4 + 3) * 2);
-      indices.push(i * 4, i * 4 + 1, i * 4 + 2, i * 4, i * 4 + 2, i * 4 + 3);
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+      geo.setAttribute("uv", new THREE.BufferAttribute(uvs, 2));
+      geo.setIndex(indices);
+      // Double-sided: the corner-derived quad winding differs between cube
+      // faces, so single-sided culling would eat half the globe.
+      const mesh = new THREE.Mesh(
+        geo,
+        new THREE.MeshBasicMaterial({ map: this.atlasTex, side: THREE.DoubleSide }),
+      );
+      const globe = new THREE.Group();
+      globe.position.x = p * PLANET_SPACING;
+      globe.add(mesh);
+      this.scene.add(globe);
+      this.globes.push(globe);
+      this.tileMeshes.push(mesh);
     }
-    const geo = new THREE.BufferGeometry();
-    geo.setAttribute("position", new THREE.BufferAttribute(positions, 3));
-    geo.setAttribute("uv", new THREE.BufferAttribute(uvs, 2));
-    geo.setIndex(indices);
-    // Double-sided: the corner-derived quad winding differs between cube
-    // faces, so single-sided culling would eat half the globe.
-    this.tileMesh = new THREE.Mesh(
-      geo,
-      new THREE.MeshBasicMaterial({ map: this.atlasTex, side: THREE.DoubleSide }),
-    );
-    this.globe.add(this.tileMesh);
-    this.scene.add(this.globe);
 
     const c0 = topo.cornersOf(0);
     this.tileDiag = Math.hypot(c0[0][0] - c0[2][0], c0[0][1] - c0[2][1], c0[0][2] - c0[2][2]) * R;
@@ -246,7 +267,8 @@ export class GlobeRenderer {
     const s = this.state;
     const tribe = tribeById(s.players[unit.ownerId].tribeId);
     const hp = (unit.hp / unit.maxHp).toFixed(2);
-    const key = `unit|${tribe.id}|${unit.embarked ?? unit.type}|${unit.veteran}|${unit.moved && unit.attacked}|${hp}|${selected}|${attackable}|${unit.fortified}`;
+    const inOrbit = unit.embarked === "orbit";
+    const key = `unit|${tribe.id}|${unit.embarked ?? "ground"}|${unit.type}|${unit.veteran}|${unit.moved && unit.attacked}|${hp}|${selected}|${attackable}|${unit.fortified}`;
     return this.spriteTexture(key, () => {
       const canvas = document.createElement("canvas");
       canvas.width = 96;
@@ -269,9 +291,19 @@ export class GlobeRenderer {
         ctx.lineWidth = attackable ? 2.5 : 2;
         ctx.stroke();
       }
+      if (inOrbit) {
+        // a golden capsule ring: this figure is riding a rocket, not standing here
+        ctx.beginPath();
+        ctx.ellipse(wx, wy - 24, 26, 34, 0, 0, Math.PI * 2);
+        ctx.strokeStyle = "rgba(255,214,110,0.9)";
+        ctx.setLineDash([6, 5]);
+        ctx.lineWidth = 2.5;
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
       drawCharacter(ctx, {
         tribe: tribe.id,
-        type: unit.embarked ?? unit.type,
+        type: unit.embarked === "orbit" ? unit.type : (unit.embarked ?? unit.type),
         x: wx,
         y: wy + 4,
         scale: 0.62,
@@ -287,17 +319,20 @@ export class GlobeRenderer {
   rebuildSprites(view: GlobeView): void {
     const s = this.state;
     const topo = sphereTopology(s.size);
-    for (const spr of this.spritePool) this.globe.remove(spr);
+    const w6 = s.size * 6;
+    for (const spr of this.spritePool) spr.removeFromParent();
     this.spritePool = [];
 
     const place = (tile: number, tex: THREE.Texture, aspect: number, size: number, lift: number) => {
-      const [cx, cy, cz] = topo.centers[tile];
+      const [x, y] = coordsOf(s, tile);
+      const planet = planetOf(s, x);
+      const [cx, cy, cz] = topo.centers[y * w6 + (x % w6)];
       const spr = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthWrite: false }));
       const r = R + lift;
       spr.position.set(cx * r, cy * r, cz * r);
       spr.scale.set(size, size * aspect, 1);
       spr.renderOrder = 1;
-      this.globe.add(spr);
+      this.globes[planet].add(spr);
       this.spritePool.push(spr);
     };
 
@@ -349,19 +384,21 @@ export class GlobeRenderer {
         view.revealAll || u.ownerId === view.viewerId || (view.explored[i] === 1 && view.watched[i] === 1);
       if (!visible) continue;
       const tex = this.unitTexture(u, u.id === view.selectedUnitId, attackable.has(u.id));
-      place(i, tex, 128 / 96, this.tileDiag * 0.62, this.tileDiag * 0.3);
+      // an orbiting unit floats visibly higher above its launch pad
+      const lift = u.embarked === "orbit" ? this.tileDiag * 0.85 : this.tileDiag * 0.3;
+      place(i, tex, 128 / 96, this.tileDiag * 0.62, lift);
     }
     this.needsRender = true;
   }
 
   /* ── interaction ── */
 
-  /** Rotate the globe under a drag of (dx, dy) CSS pixels. */
+  /** Rotate the active planet under a drag of (dx, dy) CSS pixels. */
   rotateBy(dx: number, dy: number): void {
     const speed = 0.13 * (this.camera.position.z / (R * 2.4));
     const yaw = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), (dx * speed * Math.PI) / 180);
     const pitch = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), (dy * speed * Math.PI) / 180);
-    this.globe.quaternion.premultiply(yaw).premultiply(pitch);
+    this.globes[this.activePlanet].quaternion.premultiply(yaw).premultiply(pitch);
     this.needsRender = true;
   }
 
@@ -372,20 +409,41 @@ export class GlobeRenderer {
     this.needsRender = true;
   }
 
-  /** Rotate the globe so the tile faces the camera. */
-  focusTile(x: number, y: number): void {
-    const [cx, cy, cz] = sphereTopology(this.state.size).centers[idx(this.state, x, y)];
-    this.globe.quaternion.setFromUnitVectors(new THREE.Vector3(cx, cy, cz), new THREE.Vector3(0, 0, 1));
+  /** Slide the camera over to park in front of the given planet. */
+  setActivePlanet(p: number): void {
+    if (p < 0 || p >= this.globes.length || p === this.activePlanet) return;
+    this.activePlanet = p;
+    this.camera.position.x = p * PLANET_SPACING;
+    this.camera.lookAt(p * PLANET_SPACING, 0, 0);
     this.needsRender = true;
   }
 
-  /** The tile under a canvas-relative CSS pixel, or null off the globe. */
+  /** How many planets this world has. */
+  planets(): number {
+    return this.globes.length;
+  }
+
+  /** Swing to the tile's planet and rotate it so the tile faces the camera. */
+  focusTile(x: number, y: number): void {
+    const s = this.state;
+    const planet = planetOf(s, x);
+    this.setActivePlanet(planet);
+    const w6 = s.size * 6;
+    const [cx, cy, cz] = sphereTopology(s.size).centers[y * w6 + (x % w6)];
+    this.globes[planet].quaternion.setFromUnitVectors(new THREE.Vector3(cx, cy, cz), new THREE.Vector3(0, 0, 1));
+    this.needsRender = true;
+  }
+
+  /** The tile under a canvas-relative CSS pixel, or null off every globe. */
   pick(px: number, py: number, w: number, h: number): [number, number] | null {
     const ndc = new THREE.Vector2((px / w) * 2 - 1, -(py / h) * 2 + 1);
     this.raycaster.setFromCamera(ndc, this.camera);
-    const hits = this.raycaster.intersectObject(this.tileMesh, false);
+    const hits = this.raycaster.intersectObjects(this.tileMeshes, false);
     if (hits.length === 0 || hits[0].faceIndex === undefined || hits[0].faceIndex === null) return null;
-    return coordsOf(this.state, Math.floor(hits[0].faceIndex / 2));
+    const planet = this.tileMeshes.indexOf(hits[0].object as THREE.Mesh);
+    const local = Math.floor(hits[0].faceIndex / 2);
+    const w6 = this.state.size * 6;
+    return [(local % w6) + planet * w6, Math.floor(local / w6)];
   }
 
   /* ── frame ── */
@@ -409,8 +467,10 @@ export class GlobeRenderer {
   }
 
   dispose(): void {
-    this.tileMesh.geometry.dispose();
-    (this.tileMesh.material as THREE.Material).dispose();
+    for (const mesh of this.tileMeshes) {
+      mesh.geometry.dispose();
+      (mesh.material as THREE.Material).dispose();
+    }
     this.atlasTex.dispose();
     for (const tex of this.texByKey.values()) tex.dispose();
     for (const spr of this.spritePool) spr.material.dispose();

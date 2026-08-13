@@ -1,4 +1,4 @@
-import type { GameState, Tile } from "./state";
+import type { GameState, Tile, City } from "./state";
 import {
   citiesOf,
   unitsOf,
@@ -9,9 +9,11 @@ import {
   hasTech,
   dist,
   idx,
+  planetOf,
 } from "./state";
 import type { Action } from "./actions";
-import { reachableTiles } from "./movement";
+import { reachableTiles, terrainOpenTo } from "./movement";
+import { TERRAIN } from "../data/terrain";
 import { unitRange } from "./combat";
 import { watchedMask } from "./fog";
 import {
@@ -23,7 +25,7 @@ import {
   type CityImprovement,
 } from "../data/constants";
 import { UNITS, NAVAL, type UnitType } from "../data/units";
-import { TECHS, techCost } from "../data/techs";
+import { TECHS, techCost, techAvailable } from "../data/techs";
 import { cityUnitCount, cityCapacity, playerHasPendingReward } from "./economy";
 
 /**
@@ -54,10 +56,11 @@ export function computeLegalActions(state: GameState, playerId: number): Action[
         actions.push({ type: "MOVE", unitId: unit.id, x, y });
       }
     }
-    if (!unit.attacked) {
+    if (!unit.attacked && unit.embarked !== "orbit") {
       const range = unitRange(unit);
       for (const enemy of state.units) {
         if (enemy.ownerId === playerId) continue;
+        if (enemy.embarked === "orbit") continue; // out of everyone's reach
         if (dist(state, unit.x, unit.y, enemy.x, enemy.y) > range) continue;
         if (!watched[idx(state, enemy.x, enemy.y)]) continue;
         actions.push({ type: "ATTACK", unitId: unit.id, targetId: enemy.id });
@@ -89,6 +92,32 @@ export function computeLegalActions(state: GameState, playerId: number): Action[
     ) {
       actions.push({ type: "UPGRADE_BOAT", unitId: unit.id });
     }
+    // Launch: a fresh unit standing on a friendly spaceport whose city has a
+    // Space Station may lift off, spending its turn getting into orbit.
+    if (!unit.moved && !unit.attacked && unit.embarked === null) {
+      const tile = tileAt(state, unit.x, unit.y);
+      if (tile.building === "spaceport" && tile.cityId !== null) {
+        const padCity = cityById(state, tile.cityId);
+        if (padCity && padCity.ownerId === playerId && padCity.spaceStation) {
+          actions.push({ type: "LAUNCH", unitId: unit.id });
+        }
+      }
+    }
+    // Land: next turn the orbiting unit comes down on any explored, open,
+    // unoccupied land tile of the other planet — or back onto its own pad,
+    // so a launch with nowhere to go is never a stranding.
+    if (unit.embarked === "orbit" && !unit.moved) {
+      actions.push({ type: "LAND", unitId: unit.id, x: unit.x, y: unit.y });
+      const canEnter = terrainOpenTo(state, playerId);
+      const homePlanet = planetOf(state, unit.x);
+      for (const t of state.tiles) {
+        if (planetOf(state, t.x) === homePlanet) continue;
+        if (player.explored[idx(state, t.x, t.y)] !== 1) continue;
+        if (TERRAIN[t.terrain].water || !canEnter(t.terrain)) continue;
+        if (unitAt(state, t.x, t.y)) continue;
+        actions.push({ type: "LAND", unitId: unit.id, x: t.x, y: t.y });
+      }
+    }
   }
 
   const myCities = citiesOf(state, playerId);
@@ -118,6 +147,7 @@ export function computeLegalActions(state: GameState, playerId: number): Action[
       if (!hasTech(player, def.tech) || player.stars < def.cost) continue;
       if (name === "walls" && city.walls) continue;
       if (name === "park" && city.parks >= MAX_PARKS_PER_CITY) continue;
+      if (name === "station" && (city.spaceStation || !cityHasSpaceport(state, city))) continue;
       actions.push({
         type: "BUILD_IMPROVEMENT",
         cityId: city.id,
@@ -129,6 +159,7 @@ export function computeLegalActions(state: GameState, playerId: number): Action[
   const numCities = myCities.length;
   const discounted = hasTech(player, "philosophy");
   for (const tech of TECHS) {
+    if (!techAvailable(state.mapType, tech.id)) continue;
     if (player.techs.includes(tech.id)) continue;
     if (tech.requires && !player.techs.includes(tech.requires)) continue;
     if (techCost(tech.id, numCities, discounted) > player.stars) continue;
@@ -146,6 +177,11 @@ export function computeLegalActions(state: GameState, playerId: number): Action[
 
   actions.push({ type: "END_TURN" });
   return actions;
+}
+
+/** Whether the city's territory contains a spaceport tile (any pad will do). */
+function cityHasSpaceport(state: GameState, city: City): boolean {
+  return state.tiles.some((t) => t.cityId === city.id && t.building === "spaceport");
 }
 
 function harvestActionsFor(
@@ -167,7 +203,7 @@ function harvestActionsFor(
     for (const [name, def] of Object.entries(BUILDING_DEFS)) {
       if (def.terrain !== tile.terrain) continue;
       if ("needsResource" in def && def.needsResource !== tile.resource) continue;
-      if (name === "lumber_hut" && tile.resource !== null) continue;
+      if ((name === "lumber_hut" || name === "spaceport") && tile.resource !== null) continue;
       if (!techs.includes(def.tech) || stars < def.cost) continue;
       actions.push({ type: "BUILD", x: tile.x, y: tile.y, building: name as keyof typeof BUILDING_DEFS });
     }

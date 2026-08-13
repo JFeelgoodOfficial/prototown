@@ -40,3 +40,12 @@ export const NAVAL: Record<"raft" | "ship", { name: string; atk: number; def: nu
   raft: { name: "Raft", atk: 1, def: 1, mov: 2, range: 2, upgradeCost: 0 },
   ship: { name: "Ship", atk: 2, def: 2, mov: 3, range: 2, upgradeCost: 5 },
 };
+
+/** Stats while a unit rides a capsule between launch and landing: inert cargo. */
+export const ORBIT: { name: string; atk: number; def: number; mov: number; range: number } = {
+  name: "In Orbit",
+  atk: 0,
+  def: 0,
+  mov: 0,
+  range: 0,
+};

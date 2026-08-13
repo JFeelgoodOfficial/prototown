@@ -1,5 +1,5 @@
 import type { GameState, PlayerState, Tile, TerrainType, City, Unit, MapType, Grid } from "./state";
-import { idx, coordsOf, neighbors, dist, disk, gridWidth, gridHeight, tileCount } from "./state";
+import { idx, coordsOf, neighbors, dist, disk, gridWidth, gridHeight, tileCount, isGlobeGrid, planetOf } from "./state";
 import { sphereTopology } from "./topology";
 import { mulberry32, nextInt } from "./rng";
 import { tribeById } from "../data/tribes";
@@ -121,6 +121,19 @@ function sphereNoise(rand: () => number, n: number, gridN: number): number[] {
   return out;
 }
 
+/**
+ * Noise for twin-globe maps: two independent sphere fields (planet 0 drawn
+ * first, then planet 1), interleaved into one 12n-wide row-major array.
+ */
+function twinNoise(rand: () => number, n: number, gridN: number): number[] {
+  const fields = [sphereNoise(rand, n, gridN), sphereNoise(rand, n, gridN)];
+  const w = n * 6;
+  const out: number[] = new Array(2 * w * n);
+  for (let y = 0; y < n; y++)
+    for (let x = 0; x < 2 * w; x++) out[y * 2 * w + x] = fields[x < w ? 0 : 1][y * w + (x % w)];
+  return out;
+}
+
 export function newGame(opts: NewGameOptions): GameState {
   const { seed, size, tribes, winMode } = opts;
   const mapType = opts.mapType ?? "square";
@@ -138,18 +151,42 @@ export function newGame(opts: NewGameOptions): GameState {
       ? (x: number, y: number) =>
           insideCircle(size, x, y) &&
           [-1, 0, 1].every((dy) => [-1, 0, 1].every((dx) => insideCircle(size, x + dx, y + dy)))
-      : mapType === "globe"
-        ? (x: number, y: number) => !sphereTopology(size).cornerTiles.has(idx(grid, x, y))
+      : isGlobeGrid(grid)
+        ? (x: number, y: number) =>
+            !sphereTopology(size).cornerTiles.has(y * size * 6 + (x % (size * 6)))
         : undefined;
-  const capitalMargin = mapType === "continents" ? 3 : mapType === "globe" ? 0 : 2;
-  const capitals = placeCapitals(rand, grid, tribes.length, capitalOk, capitalMargin);
+  const capitalMargin = mapType === "continents" ? 3 : isGlobeGrid(grid) ? 0 : 2;
+  // Twin globes seat tribes round the two planets: the first ceil(k/2) seats
+  // (humans first, so the human home world is planet 0) on planet 0, the rest
+  // on planet 1. One placeCapitals call per planet — a single global call
+  // would tie every cross-planet pair at Infinity.
+  let capitals: Array<[number, number]>;
+  if (mapType === "twin_globes") {
+    const split = Math.ceil(tribes.length / 2);
+    const onPlanet = (p: number) => (x: number, y: number) =>
+      planetOf(grid, x) === p && capitalOk!(x, y);
+    capitals = [
+      ...placeCapitals(rand, grid, split, onPlanet(0), 0),
+      ...placeCapitals(rand, grid, tribes.length - split, onPlanet(1), 0),
+    ];
+  } else {
+    capitals = placeCapitals(rand, grid, tribes.length, capitalOk, capitalMargin);
+  }
 
   // Terrain from two noise fields: elevation decides water/land/mountain,
   // moisture decides forest. Tribe biases tilt generation near each capital.
   const elevation =
-    mapType === "globe" ? sphereNoise(rand, size, Math.max(3, Math.round(size * 0.8))) : valueNoise(rand, size, 4);
+    mapType === "twin_globes"
+      ? twinNoise(rand, size, Math.max(3, Math.round(size * 0.8)))
+      : mapType === "globe"
+        ? sphereNoise(rand, size, Math.max(3, Math.round(size * 0.8)))
+        : valueNoise(rand, size, 4);
   const moisture =
-    mapType === "globe" ? sphereNoise(rand, size, Math.max(3, Math.round(size * 0.6))) : valueNoise(rand, size, 3);
+    mapType === "twin_globes"
+      ? twinNoise(rand, size, Math.max(3, Math.round(size * 0.6)))
+      : mapType === "globe"
+        ? sphereNoise(rand, size, Math.max(3, Math.round(size * 0.6)))
+        : valueNoise(rand, size, 3);
 
   const tiles: Tile[] = [];
   // Blob-plus-noise elevation kept around so later passes can raise the
@@ -235,7 +272,13 @@ export function newGame(opts: NewGameOptions): GameState {
   // follow BFS shortest paths over the sphere instead. Continents maps
   // deliberately skip this: the ocean between landmasses is the point, and
   // crossing it takes sailing.
-  if (mapType === "globe") {
+  if (mapType === "twin_globes") {
+    // Corridors never cross between planets: BFS would exhaust one planet
+    // without ever reaching the other and the path walk would crash.
+    for (const p of [0, 1]) {
+      carveCorridorsGlobe(state, capitals.filter(([x]) => planetOf(state, x) === p));
+    }
+  } else if (mapType === "globe") {
     carveCorridorsGlobe(state, capitals);
   } else if (mapType === "continents") {
     ensureMinLandmass(state, capitals, continentElevation, new Set());
@@ -344,6 +387,7 @@ export function newGame(opts: NewGameOptions): GameState {
       walls: false,
       workshop: false,
       parks: 0,
+      spaceStation: false,
       borderRadius: 1,
       pendingReward: null,
     };

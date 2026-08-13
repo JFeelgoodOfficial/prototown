@@ -438,6 +438,18 @@ export class GameController {
         this.addFloat(ruin.x, ruin.y, ruin.label, ruin.playerId === this.localSeat ? "#ffd75e" : "#c8b79b");
         playSound(ruin.playerId === this.localSeat ? "levelUp" : "capture");
       }
+    } else if (action.type === "LAUNCH") {
+      this.state = applyAction(this.state, action);
+      playSound("missile");
+    } else if (action.type === "LAND") {
+      // no tween: the capsule crosses between planets, not across tiles
+      this.state = applyAction(this.state, action);
+      playSound("move");
+      const ruin = this.state.lastRuinReward;
+      if (ruin) {
+        this.addFloat(ruin.x, ruin.y, ruin.label, ruin.playerId === this.localSeat ? "#ffd75e" : "#c8b79b");
+        playSound(ruin.playerId === this.localSeat ? "levelUp" : "capture");
+      }
     } else {
       const before = this.state;
       this.state = applyAction(before, action);

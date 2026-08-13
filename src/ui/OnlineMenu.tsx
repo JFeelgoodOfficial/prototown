@@ -109,10 +109,10 @@ export default function OnlineMenu({ onBack }: { onBack: () => void }) {
       )}
       <Section label="Map">
         <Choice
-          options={["square", "circle", "continents", "globe"] as MapType[]}
+          options={["square", "circle", "continents", "globe", "twin_globes"] as MapType[]}
           value={mapType}
           onPick={setMapType}
-          render={(m) => m.charAt(0).toUpperCase() + m.slice(1)}
+          render={(m) => (m === "twin_globes" ? "Twin Worlds" : m.charAt(0).toUpperCase() + m.slice(1))}
         />
       </Section>
       <Section label="Victory">

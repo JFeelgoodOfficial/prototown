@@ -62,6 +62,22 @@ describe("save / load", () => {
     expect(restored!.state.mapType).toBe("square");
   });
 
+  it("loads version 6 saves, which predate space stations", () => {
+    const s = newGame({ seed: 13, size: 11, tribes: ["korvani", "thornwood"], winMode: "domination" });
+    const bare = JSON.parse(JSON.stringify(s));
+    for (const c of bare.cities) delete c.spaceStation;
+    const restored = deserialize(JSON.stringify({ version: 6, savedAt: 1, difficulty: "normal", state: bare }));
+    expect(restored).not.toBeNull();
+    for (const c of restored!.state.cities) expect(c.spaceStation).toBe(false);
+  });
+
+  it("roundtrips a twin-globe game with its map type", () => {
+    const s = newGame({ seed: 4, size: 5, mapType: "twin_globes", tribes: ["meridia", "ashfen"], winMode: "domination" });
+    const restored = deserialize(serialize(s, 0, "normal"));
+    expect(restored!.state.mapType).toBe("twin_globes");
+    expect(JSON.stringify(restored!.state)).toBe(JSON.stringify(s));
+  });
+
   it("roundtrips a circle game with its map type", () => {
     const s = newGame({ seed: 3, size: 11, mapType: "circle", tribes: ["meridia", "ashfen"], winMode: "domination" });
     const restored = deserialize(serialize(s, 0, "normal"));

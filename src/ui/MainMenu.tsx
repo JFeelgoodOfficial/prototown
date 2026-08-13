@@ -15,14 +15,21 @@ const MAP_LABELS: Record<MapType, string> = {
   circle: "Circle — a round world",
   continents: "Continents — cross the ocean to meet your rivals",
   globe: "Globe — a spinning world with no edges",
+  twin_globes: "Twin Worlds — conquer a second planet across space",
 };
 /** Shapes offered on the setup screen. */
-const MAP_CHOICES: MapType[] = ["square", "circle", "continents", "globe"];
+const MAP_CHOICES: MapType[] = ["square", "circle", "continents", "globe", "twin_globes"];
 
 /** Globe boards use the cube-face resolution n (6n² tiles), sized to keep
     tile counts close to the flat boards for the same crowd. */
 export function globeFaceSize(opponents: number): number {
   return opponents === 1 ? 5 : opponents === 2 ? 6 : 7;
+}
+
+/** Twin worlds double the tile count per n, so they run one size smaller
+    (12n² tiles total; the texture atlas caps n at 8). */
+export function twinFaceSize(opponents: number): number {
+  return opponents === 1 ? 5 : 6;
 }
 
 /** The new-game setup, reached from Start on the title screen. */
@@ -48,7 +55,15 @@ export default function MainMenu({ onBack }: { onBack?: () => void }) {
 
   const start = () => {
     const size =
-      mapType === "globe" ? globeFaceSize(opponents) : opponents === 1 ? 11 : opponents === 2 ? 14 : 16;
+      mapType === "globe"
+        ? globeFaceSize(opponents)
+        : mapType === "twin_globes"
+          ? twinFaceSize(opponents)
+          : opponents === 1
+            ? 11
+            : opponents === 2
+              ? 14
+              : 16;
     const others = TRIBES.filter((t) => t.id !== tribeId).map((t) => t.id);
     const tribes = [tribeId, ...others.slice(0, opponents)];
     const seed = Math.floor(Math.random() * 2 ** 31);

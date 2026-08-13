@@ -13,7 +13,7 @@ import {
   anchorZoom,
   type Camera,
 } from "../render/camera";
-import { playerById, isPlayable } from "../engine/state";
+import { playerById, isPlayable, isGlobeGrid } from "../engine/state";
 import { watchedMask } from "../engine/fog";
 import TopBar from "./TopBar";
 import SidePanel from "./SidePanel";
@@ -24,7 +24,7 @@ import { handleBoardClick } from "./boardClick";
 
 export default function GameScreen() {
   const game = useGame();
-  const isGlobe = controller.state?.mapType === "globe";
+  const isGlobe = controller.state !== null && isGlobeGrid(controller.state);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const cameraRef = useRef<Camera | null>(null);
   const hoverRef = useRef<[number, number] | null>(null);

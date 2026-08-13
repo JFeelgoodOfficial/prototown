@@ -1,6 +1,6 @@
 import type { GameState, Unit } from "./state";
 import { tileAt, playerById, hasTech, cityById, dist } from "./state";
-import { UNITS, NAVAL } from "../data/units";
+import { UNITS, NAVAL, ORBIT } from "../data/units";
 import {
   ATTACK_ACCELERATOR,
   DEFENCE_BONUS_TERRAIN,
@@ -12,26 +12,33 @@ import {
 import { TERRAIN } from "../data/terrain";
 import { abilityOf } from "./tribeAbility";
 
+/** The stat block replacing the unit's own while embarked (boat or capsule). */
+function embarkedStats(u: Unit): { atk: number; def: number; mov: number; range: number } | null {
+  if (u.embarked === null) return null;
+  return u.embarked === "orbit" ? ORBIT : NAVAL[u.embarked];
+}
+
 export function unitAtk(u: Unit): number {
-  return u.embarked ? NAVAL[u.embarked].atk : UNITS[u.type].atk;
+  return embarkedStats(u)?.atk ?? UNITS[u.type].atk;
 }
 
 export function unitDef(u: Unit): number {
-  return u.embarked ? NAVAL[u.embarked].def : UNITS[u.type].def;
+  return embarkedStats(u)?.def ?? UNITS[u.type].def;
 }
 
 export function unitRange(u: Unit): number {
-  return u.embarked ? NAVAL[u.embarked].range : UNITS[u.type].range;
+  return embarkedStats(u)?.range ?? UNITS[u.type].range;
 }
 
 /** Base movement, before any tribe bonus (used where no state is at hand). */
 export function unitMov(u: Unit): number {
-  return u.embarked ? NAVAL[u.embarked].mov : UNITS[u.type].mov;
+  return embarkedStats(u)?.mov ?? UNITS[u.type].mov;
 }
 
 /** Movement including the owner's tribe ability. */
 export function unitMovIn(state: GameState, u: Unit): number {
-  const bonus = u.embarked ? abilityOf(state, u.ownerId).navalMoveBonus : 0;
+  const afloat = u.embarked === "raft" || u.embarked === "ship";
+  const bonus = afloat ? abilityOf(state, u.ownerId).navalMoveBonus : 0;
   return unitMov(u) + bonus;
 }
 

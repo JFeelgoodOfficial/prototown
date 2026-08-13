@@ -596,9 +596,10 @@ function drawUnit(ctx: CanvasRenderingContext2D, state: GameState, unit: Unit, w
   }
 
   // The character art carries the veteran star, HP bar and acted dim itself.
+  // (An orbiting unit keeps its own figure; orbit only happens on globe maps.)
   drawCharacter(ctx, {
     tribe: tribe.id,
-    type: unit.embarked ?? unit.type,
+    type: unit.embarked === "orbit" ? unit.type : (unit.embarked ?? unit.type),
     x: wx,
     y: wy + 4,
     scale: UNIT_ART_SCALE,

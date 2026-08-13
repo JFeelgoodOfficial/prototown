@@ -1118,6 +1118,45 @@ function drawBuilding(ctx: Ctx, building: BuildingType, k: TribeKit): void {
     return;
   }
 
+  if (building === "spaceport") {
+    /* spaceport: scorched concrete apron, service gantry, tribe-liveried rocket */
+    trampledGround(ctx, 22, 9);
+    castShadow(ctx, 8, 6, 20, 6, 0.32);
+    plate(ctx, [[-16, 1], [14, 1], [17, 8], [-13, 8]], "#8d8a84", { hi: "#c0bcb4", lo: "#3a3834", rimA: 0.4 });
+    stroke(ctx, [[-12, 4.4], [14, 4.4]], "rgba(30,28,26,0.35)", 1.1);
+    orb(ctx, 5, 4.6, 4.6, 1.8, "#4a4642", { rim: false });
+    // service gantry with cross-bracing and a crew arm to the hatch
+    limb(ctx, [-8, 5], [-8, -16], 1.2, 1, dk(k.metal, 0.05), { hi: "#9aa0aa", lo: "#24272d" });
+    limb(ctx, [-3, 5], [-3, -20], 1.4, 1.1, dk(k.metal, 0.05), { hi: "#9aa0aa", lo: "#24272d" });
+    for (let i = 0; i < 4; i++) {
+      const yy = -1 - i * 4.2;
+      stroke(ctx, [[-8, yy], [-3, yy - 2.2]], "#6b7078", 1);
+      stroke(ctx, [[-8, yy - 2.2], [-3, yy]], "#464b52", 1);
+    }
+    stroke(ctx, [[-3, -18], [2.4, -15.6]], "#9aa0aa", 1.2);
+    // the rocket: white hull, tribe nose cone and fins, one porthole
+    plate(ctx, [[2.2, 4], [3.6, -2], [3.6, 4]], dk(k.color, 0.15), { hi: "#ffffff", lo: dk(k.color, 0.5), rimA: 0.3 });
+    plate(ctx, [[7.8, 4], [6.4, -2], [6.4, 4]], dk(k.color, 0.25), { hi: "#ffffff", lo: dk(k.color, 0.5), rimA: 0.3 });
+    limb(ctx, [5, 4], [5, -14], 3.2, 2.8, "#d9dde2", { hi: "#f4f7fa", lo: "#5c6068" });
+    plate(ctx, [[2.2, -13], [7.8, -13], [5, -21], [5, -21]], k.color, { hi: "#fff2bf", lo: dk(k.color, 0.45), rimA: 0.35 });
+    stroke(ctx, [[2.4, -4], [7.6, -4]], k.color, 1.5);
+    orb(ctx, 5, -9, 1.3, 1.3, "#20303f", { hi: "#7fb1d8" });
+    spec(ctx, 4.6, -9.4, 0.5, 0.4, 0, 0.6);
+    ctx.fillStyle = RG(ctx, 5, 3.4, 4.5, [
+      [0, "rgba(255,196,110,0.45)"],
+      [1, "rgba(255,196,110,0)"],
+    ]);
+    ctx.beginPath();
+    ctx.ellipse(5, 3.4, 4.5, 2, 0, 0, Math.PI * 2);
+    ctx.fill();
+    // control hut off the apron
+    wall(ctx, -18, -3, 8, 7, "#9c948a");
+    roof(ctx, -14, -3, 5.5, 4, k.color);
+    litWindow(ctx, -13.4, -0.6, 3, 2.4);
+    tribeMark(ctx, k, -14, 6);
+    return;
+  }
+
   /* lumber hut: stacked-log walls, plank roof, cut stack, stump and axe */
   trampledGround(ctx, 20, 8);
   castShadow(ctx, 11, 5, 16, 5, 0.32);
