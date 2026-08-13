@@ -58,8 +58,8 @@ function placeCapitals(
   size: number,
   count: number,
   valid?: (x: number, y: number) => boolean,
+  margin = 2,
 ): Array<[number, number]> {
-  const margin = 2;
   const candidates: Array<[number, number]> = [];
   for (let y = margin; y < size - margin; y++)
     for (let x = margin; x < size - margin; x++) {
@@ -98,7 +98,7 @@ export function newGame(opts: NewGameOptions): GameState {
           insideCircle(size, x, y) &&
           [-1, 0, 1].every((dy) => [-1, 0, 1].every((dx) => insideCircle(size, x + dx, y + dy)))
       : undefined;
-  const capitals = placeCapitals(rand, size, tribes.length, capitalOk);
+  const capitals = placeCapitals(rand, size, tribes.length, capitalOk, mapType === "continents" ? 3 : 2);
 
   // Terrain from two noise fields: elevation decides water/land/mountain,
   // moisture decides forest. Tribe biases tilt generation near each capital.
@@ -106,6 +106,9 @@ export function newGame(opts: NewGameOptions): GameState {
   const moisture = valueNoise(rand, size, 3);
 
   const tiles: Tile[] = [];
+  // Blob-plus-noise elevation kept around so later passes can raise the
+  // shallowest sea when a starting continent comes out too small.
+  const continentElevation: number[] = new Array(size * size).fill(0);
   for (let y = 0; y < size; y++) {
     for (let x = 0; x < size; x++) {
       if (mapType === "circle" && !insideCircle(size, x, y)) {
@@ -129,7 +132,18 @@ export function newGame(opts: NewGameOptions): GameState {
       }
 
       let terrain: TerrainType;
-      if (e < 0.32) terrain = e < 0.22 ? "ocean" : "water";
+      if (mapType === "continents") {
+        // Each capital anchors a landmass blob; away from every blob the sea
+        // takes over, so tribes start separated by ocean.
+        const blob = Math.max(
+          ...capitals.map(([cx, cy]) => Math.max(0, 1 - Math.hypot(x - cx, y - cy) / (size * 0.3))),
+        );
+        const e2 = 0.5 * e + 0.5 * blob;
+        continentElevation[y * size + x] = e2;
+        if (e2 <= 0.45) terrain = "ocean";
+        else if (e > 0.78) terrain = "mountain";
+        else terrain = m > 0.62 ? "forest" : "field";
+      } else if (e < 0.32) terrain = e < 0.22 ? "ocean" : "water";
       else if (e > 0.78) terrain = "mountain";
       else terrain = m > 0.62 ? "forest" : "field";
 
@@ -171,7 +185,17 @@ export function newGame(opts: NewGameOptions): GameState {
   // Guarantee land reachability between capitals: carve field corridors.
   // On a circle map, route via the centre tile — each x-then-y leg only ever
   // moves a coordinate toward the centre, so the whole path stays in the disc.
-  if (mapType === "circle") {
+  // Continents maps deliberately skip this: the ocean between landmasses is
+  // the point, and crossing it takes sailing.
+  if (mapType === "continents") {
+    ensureMinLandmass(state, capitals, continentElevation, new Set());
+    coastalShelf(state);
+    // Channel-carving can nibble a continent back below the minimum, so the
+    // growth pass runs again afterwards, forbidden from filling the channels in.
+    const channels = ensureCoastalWater(state, capitals);
+    ensureMinLandmass(state, capitals, continentElevation, channels);
+    coastalShelf(state); // regrown coastline gets its shelf too
+  } else if (mapType === "circle") {
     const c: [number, number] = [Math.floor(size / 2), Math.floor(size / 2)];
     for (const cap of capitals) carveCorridors(state, [cap, c]);
   } else {
@@ -313,6 +337,118 @@ export function claimTerritory(state: GameState, city: City): void {
       if (t.cityId === null) t.cityId = city.id;
     }
   }
+}
+
+const isLandTerrain = (t: TerrainType): boolean => t === "field" || t === "forest" || t === "mountain";
+
+/** A starting continent below this many land tiles is unplayably cramped. */
+const MIN_CONTINENT = 20;
+
+/** Every land tile 8-connected to (sx, sy). */
+function landmassOf(state: GameState, sx: number, sy: number): Set<number> {
+  const seen = new Set<number>([idx(state, sx, sy)]);
+  const queue: Array<[number, number]> = [[sx, sy]];
+  while (queue.length) {
+    const [x, y] = queue.pop()!;
+    for (const [nx, ny] of neighbors(state, x, y)) {
+      const key = idx(state, nx, ny);
+      if (seen.has(key) || !isLandTerrain(state.tiles[key].terrain)) continue;
+      seen.add(key);
+      queue.push([nx, ny]);
+    }
+  }
+  return seen;
+}
+
+/**
+ * Grow each capital's continent to a playable minimum by raising the
+ * shallowest sea tile on its coast, deterministically, until it is big enough.
+ */
+function ensureMinLandmass(
+  state: GameState,
+  capitals: Array<[number, number]>,
+  elevation: number[],
+  keepWet: Set<number>,
+): void {
+  for (const [cx, cy] of capitals) {
+    for (let guard = 0; guard < state.size * state.size; guard++) {
+      const mass = landmassOf(state, cx, cy);
+      if (mass.size >= MIN_CONTINENT) break;
+      let best = -1;
+      let bestElev = Infinity;
+      for (const key of mass) {
+        const t = state.tiles[key];
+        for (const [nx, ny] of neighbors(state, t.x, t.y)) {
+          const nk = idx(state, nx, ny);
+          const nt = state.tiles[nk];
+          if (nt.terrain !== "water" && nt.terrain !== "ocean") continue;
+          if (keepWet.has(nk)) continue;
+          if (elevation[nk] < bestElev || (elevation[nk] === bestElev && nk < best)) {
+            bestElev = elevation[nk];
+            best = nk;
+          }
+        }
+      }
+      if (best < 0) break; // no raisable coast — nothing to do
+      state.tiles[best].terrain = "field";
+    }
+  }
+}
+
+/** Deep ocean touching land becomes shallow water: a shelf for ports, fish and rafts. */
+function coastalShelf(state: GameState): void {
+  for (const t of state.tiles) {
+    if (t.terrain !== "ocean") continue;
+    if (neighbors(state, t.x, t.y).some(([nx, ny]) => isLandTerrain(state.tiles[idx(state, nx, ny)].terrain)))
+      t.terrain = "water";
+  }
+}
+
+/**
+ * A capital with no shallow water beside it could never build a port and its
+ * tribe would be stuck on its island forever. Carve a 1-wide sea channel from
+ * the nearest sea tile to just beside the capital.
+ */
+function ensureCoastalWater(state: GameState, capitals: Array<[number, number]>): Set<number> {
+  const capitalKeys = new Set(capitals.map(([x, y]) => idx(state, x, y)));
+  // every water tile the guarantee depends on, so later passes leave them wet
+  const keepWet = new Set<number>();
+  for (const [cx, cy] of capitals) {
+    const shore = neighbors(state, cx, cy).filter(
+      ([nx, ny]) => state.tiles[idx(state, nx, ny)].terrain === "water",
+    );
+    if (shore.length > 0) {
+      for (const [nx, ny] of shore) keepWet.add(idx(state, nx, ny));
+      continue;
+    }
+
+    // nearest sea tile, deterministic tie-break by index
+    let sea: Tile | null = null;
+    let bestD = Infinity;
+    for (const t of state.tiles) {
+      if (t.terrain !== "water" && t.terrain !== "ocean") continue;
+      const d = (t.x - cx) ** 2 + (t.y - cy) ** 2;
+      if (d < bestD) {
+        bestD = d;
+        sea = t;
+      }
+    }
+    if (!sea) continue; // a world with no sea at all needs no ports
+
+    keepWet.add(idx(state, sea.x, sea.y));
+    let x = sea.x;
+    let y = sea.y;
+    while (dist(x, y, cx, cy) > 1) {
+      if (x !== cx) x += Math.sign(cx - x);
+      else y += Math.sign(cy - y);
+      const key = idx(state, x, y);
+      if (capitalKeys.has(key)) break; // never sink a capital
+      const t = state.tiles[key];
+      if (isLandTerrain(t.terrain)) t.terrain = "water";
+      keepWet.add(key);
+    }
+  }
+  return keepWet;
 }
 
 /** Carve 1-wide field corridors along L-paths so all capitals connect by land. */

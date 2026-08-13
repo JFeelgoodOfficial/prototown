@@ -11,7 +11,7 @@ export const DAILY_OPPONENTS = 2;
 export const DAILY_DIFFICULTY: Difficulty = "normal";
 /** Shapes the daily may roll. Derived from the date seed, so it is the same
     worldwide; grow this list once a shape has proven itself. */
-export const DAILY_MAP_ROTATION: MapType[] = ["square", "circle"];
+export const DAILY_MAP_ROTATION: MapType[] = ["square", "circle", "continents"];
 
 export function dailyKey(date = new Date()): string {
   const y = date.getUTCFullYear();

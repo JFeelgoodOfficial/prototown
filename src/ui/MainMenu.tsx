@@ -17,7 +17,7 @@ const MAP_LABELS: Record<MapType, string> = {
   globe: "Globe — a spinning world with no edges",
 };
 /** Shapes offered on the setup screen. */
-const MAP_CHOICES: MapType[] = ["square", "circle"];
+const MAP_CHOICES: MapType[] = ["square", "circle", "continents"];
 
 /** The new-game setup, reached from Start on the title screen. */
 export default function MainMenu({ onBack }: { onBack?: () => void }) {
