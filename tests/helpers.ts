@@ -67,6 +67,7 @@ export function addCity(state: GameState, ownerId: number, x: number, y: number,
     walls: false,
     workshop: false,
     parks: 0,
+    spaceStation: false,
     borderRadius: 1,
     pendingReward: null,
   };

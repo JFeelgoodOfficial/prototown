@@ -17,6 +17,11 @@ export function handleBoardClick([x, y]: [number, number]): void {
       controller.dispatch(move);
       return;
     }
+    const land = controller.legal.find((a) => a.type === "LAND" && a.unitId === selected && a.x === x && a.y === y);
+    if (land) {
+      controller.dispatch(land);
+      return;
+    }
     const targetUnit = unitAt(s, x, y);
     if (targetUnit) {
       const attack = controller.legal.find(

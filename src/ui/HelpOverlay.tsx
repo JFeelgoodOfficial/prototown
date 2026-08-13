@@ -65,6 +65,16 @@ export default function HelpOverlay({ onClose }: { onClose: () => void }) {
               "Strategy lets every city support one more unit.",
             ]}
           />
+          <List
+            title="Space Travel (Twin Worlds maps)"
+            items={[
+              "On Twin Worlds maps, half the tribes start on each of two planets — nothing crosses between them on foot or by sea.",
+              "Research Space Travel (after Rocketry) to build a Spaceport on a field tile in your borders.",
+              "Buy the Space Station in a city that has a spaceport: it unlocks launches and photographs part of the other planet from orbit.",
+              "Move a unit onto your spaceport and Launch. It spends a turn in orbit — untouchable, but committed.",
+              "Next turn, tap a lit tile on the other world to land, then conquer as usual. Capture every enemy city on both worlds to win.",
+            ]}
+          />
         </div>
       </div>
     </div>

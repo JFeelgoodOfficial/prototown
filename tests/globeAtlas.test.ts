@@ -3,6 +3,8 @@ import { ATLAS_SIZE, CELL_H, CELL_W, atlasCols, cellOrigin, cellDiamondUv } from
 
 /** The biggest globe the menus offer: n=7 → 294 tiles. */
 const MAX_TILES = 6 * 7 * 7;
+/** The hard cap for twin worlds: two planets at n=8 → 768 tiles, still ≤ 882 cells. */
+const MAX_TWIN_TILES = 12 * 8 * 8;
 
 describe("globe atlas layout", () => {
   it("fits every tile of the biggest globe inside the atlas", () => {
@@ -15,9 +17,17 @@ describe("globe atlas layout", () => {
     }
   });
 
+  it("fits both planets of the biggest twin world inside the atlas", () => {
+    for (let i = 0; i < MAX_TWIN_TILES; i++) {
+      const [x, y] = cellOrigin(i);
+      expect(x + CELL_W).toBeLessThanOrEqual(ATLAS_SIZE);
+      expect(y + CELL_H).toBeLessThanOrEqual(ATLAS_SIZE);
+    }
+  });
+
   it("gives every tile its own cell", () => {
     const seen = new Set<string>();
-    for (let i = 0; i < MAX_TILES; i++) {
+    for (let i = 0; i < MAX_TWIN_TILES; i++) {
       const key = cellOrigin(i).join(",");
       expect(seen.has(key)).toBe(false);
       seen.add(key);

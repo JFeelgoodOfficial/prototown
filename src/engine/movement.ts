@@ -17,6 +17,8 @@ import { abilityOf } from "./tribeAbility";
  *    half and is never stopped by the terrain underneath it
  */
 export function reachableTiles(state: GameState, unit: Unit): Array<[number, number]> {
+  // a unit in orbit is between worlds: it lands (or aborts), it does not walk
+  if (unit.embarked === "orbit") return [];
   const player = playerById(state, unit.ownerId);
   const start = idx(state, unit.x, unit.y);
   const canEnter = terrainOpenTo(state, unit.ownerId);

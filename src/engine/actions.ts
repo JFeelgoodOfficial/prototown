@@ -10,6 +10,8 @@ export type Action =
   | { type: "FORTIFY"; unitId: number }
   | { type: "DISBAND"; unitId: number }
   | { type: "UPGRADE_BOAT"; unitId: number }
+  | { type: "LAUNCH"; unitId: number }
+  | { type: "LAND"; unitId: number; x: number; y: number }
   | { type: "HARVEST"; x: number; y: number }
   | { type: "BUILD"; x: number; y: number; building: BuildingType }
   | { type: "TRAIN"; cityId: number; unitType: UnitType }

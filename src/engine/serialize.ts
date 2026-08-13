@@ -1,6 +1,6 @@
 import type { GameState } from "./state";
 
-export const SAVE_VERSION = 6;
+export const SAVE_VERSION = 7;
 
 export interface SaveFile {
   version: number;
@@ -38,6 +38,9 @@ function normalize(state: GameState): GameState {
   if (state.nukeLaunched === undefined) state.nukeLaunched = false;
   for (const tile of state.tiles) {
     if (tile.ruin === undefined) tile.ruin = false;
+  }
+  for (const city of state.cities) {
+    if (city.spaceStation === undefined) city.spaceStation = false;
   }
   return state;
 }

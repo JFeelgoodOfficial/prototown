@@ -1,5 +1,5 @@
 import type { GameState, Unit } from "../engine/state";
-import { unitById, cityById, tileAt, playerById, dist, idx, neighbors, citiesOf, unitsOf, hasTech } from "../engine/state";
+import { unitById, cityById, tileAt, playerById, dist, idx, neighbors, citiesOf, unitsOf, hasTech, planetOf } from "../engine/state";
 import type { Action } from "../engine/actions";
 import { resolveCombat } from "../engine/combat";
 import { UNITS } from "../data/units";
@@ -120,8 +120,19 @@ export function objectivesFor(state: GameState, playerId: number): Objective[] {
  * unexplored land — lies across water rather than within walking distance.
  * That is the moment ports and sailing stop being a luxury.
  */
+/** Planets where the player has any unit or city. {0} on single-world maps. */
+function planetsOf(state: GameState, playerId: number): Set<number> {
+  const out = new Set<number>();
+  for (const u of unitsOf(state, playerId)) out.add(planetOf(state, u.x));
+  for (const c of citiesOf(state, playerId)) out.add(planetOf(state, c.x));
+  return out;
+}
+
 export function wantsSeafaring(state: GameState, playerId: number): boolean {
   const player = playerById(state, playerId);
+  // The twin world is reached by rocket, not raft: goals there must not read
+  // as "overseas" or every tribe would buy boats forever.
+  const myPlanets = planetsOf(state, playerId);
 
   // Everything a land unit could walk to from any of our units or cities.
   const region = new Set<number>();
@@ -143,6 +154,7 @@ export function wantsSeafaring(state: GameState, playerId: number): boolean {
 
   let overseas = false;
   for (const t of state.tiles) {
+    if (!myPlanets.has(planetOf(state, t.x))) continue;
     const i = idx(state, t.x, t.y);
     const terr = TERRAIN[t.terrain];
     const explored = player.explored[i] === 1;
@@ -155,6 +167,36 @@ export function wantsSeafaring(state: GameState, playerId: number): boolean {
     overseas = true;
   }
   return overseas;
+}
+
+/**
+ * True when the tribe should be reaching for the stars: a twin-globe map,
+ * no foothold on the other world yet, and something over there worth having —
+ * before the orbital survey the whole planet is unexplored, so it always is.
+ */
+export function wantsSpaceTravel(state: GameState, playerId: number): boolean {
+  if (state.mapType !== "twin_globes") return false;
+  const player = playerById(state, playerId);
+  const myPlanets = planetsOf(state, playerId);
+  for (const t of state.tiles) {
+    if (myPlanets.has(planetOf(state, t.x))) continue;
+    if (player.explored[idx(state, t.x, t.y)] !== 1) return true;
+    if (t.village) return true;
+    if (t.cityHere !== null && cityById(state, t.cityHere)?.ownerId !== playerId) return true;
+  }
+  return false;
+}
+
+/** Anything on the other planet (seen from `homePlanet`) worth flying to. */
+function otherWorldWorthwhile(state: GameState, playerId: number, homePlanet: number): boolean {
+  const player = playerById(state, playerId);
+  for (const t of state.tiles) {
+    if (planetOf(state, t.x) === homePlanet) continue;
+    if (player.explored[idx(state, t.x, t.y)] !== 1) return true;
+    if (t.village) return true;
+    if (t.cityHere !== null && cityById(state, t.cityHere)?.ownerId !== playerId) return true;
+  }
+  return false;
 }
 
 export function scoreAction(
@@ -214,6 +256,15 @@ export function scoreAction(
       ) {
         score += 30;
       }
+      // As is walking onto our own launch pad when the other world beckons.
+      if (
+        unit.embarked === null &&
+        destTile.building === "spaceport" &&
+        cityById(state, destTile.cityId ?? -1)?.ownerId === playerId &&
+        wantsSpaceTravel(state, playerId)
+      ) {
+        score += 30;
+      }
       return score;
     }
 
@@ -254,6 +305,13 @@ export function scoreAction(
         );
         if (!hasPort) return 90 * personality.economy;
       }
+      // and the first spaceport is the way off the planet
+      if (action.building === "spaceport" && wantsSpaceTravel(state, playerId)) {
+        const hasPad = state.tiles.some(
+          (t) => t.building === "spaceport" && t.cityId !== null && cityById(state, t.cityId)?.ownerId === playerId,
+        );
+        if (!hasPad) return 90 * personality.economy;
+      }
       return 50 * personality.economy;
     }
 
@@ -290,6 +348,8 @@ export function scoreAction(
       if (["fishing", "sailing", "navigation"].includes(tech.id) && wantsSeafaring(state, playerId)) {
         score += tech.id === "fishing" ? 15 : tech.id === "sailing" ? 25 : 18;
       }
+      // a whole rival world out of reach: rocket science jumps it further
+      if (tech.id === "space_travel" && wantsSpaceTravel(state, playerId)) score += 25;
       // don't spend everything on research when broke
       if (player.stars < 8) score -= 15;
       return score * personality.research;
@@ -311,6 +371,8 @@ export function scoreAction(
 
     case "BUILD_IMPROVEMENT": {
       if (action.improvement === "walls") return 26 * personality.aggression;
+      // the station is the gateway to the other world (and its survey photos)
+      if (action.improvement === "station") return wantsSpaceTravel(state, playerId) ? 70 : 4;
       // a park is 250 points of nothing else; only Perfection games care
       return state.winMode === "perfection" ? 60 : 8;
     }
@@ -331,6 +393,39 @@ export function scoreAction(
 
     case "UPGRADE_BOAT":
       return 6;
+
+    case "LAUNCH": {
+      const unit = unitById(state, action.unitId);
+      if (!unit) return -Infinity;
+      // Reinforcements keep flying as long as the other world has anything
+      // left to take — this must not gate on having no foothold yet, or every
+      // invasion would be a single lonely warrior.
+      const worthGoing = otherWorldWorthwhile(state, playerId, planetOf(state, unit.x));
+      return worthGoing ? 150 * personality.expansion : -20;
+    }
+
+    case "LAND": {
+      const unit = unitById(state, action.unitId);
+      if (!unit) return -Infinity;
+      // aborting back onto the pad wastes the launch: a last resort
+      if (action.x === unit.x && action.y === unit.y) return -40;
+      let score = 100 * personality.expansion;
+      const destTile = tileAt(state, action.x, action.y);
+      if (destTile.village) score += 60 * personality.expansion;
+      if (destTile.cityHere !== null) {
+        const c = cityById(state, destTile.cityHere);
+        if (c && c.ownerId !== playerId) score += 60 * personality.expansion;
+      }
+      // prefer coming down near what we came for; cross-planet objectives
+      // are Infinity away and drop out on their own
+      let pull = 0;
+      for (const o of objectives) {
+        const d = dist(state, action.x, action.y, o.x, o.y);
+        if (!Number.isFinite(d)) continue;
+        pull = Math.max(pull, o.weight * 10 - d);
+      }
+      return score + pull * 2;
+    }
 
     case "DISBAND":
       return -100;

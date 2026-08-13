@@ -56,6 +56,8 @@ export function buildState(config: OnlineConfig, log: ActionRow[]): GameState {
 const sizeForPlayers = (n: number): number => (n <= 2 ? 11 : n === 3 ? 14 : 16);
 /** Globe boards store the cube-face resolution instead of an edge length. */
 const globeSizeForPlayers = (n: number): number => (n <= 2 ? 5 : n === 3 ? 6 : 7);
+/** Twin worlds have 12n² tiles, so they run one face size smaller. */
+const twinSizeForPlayers = (n: number): number => (n <= 2 ? 5 : 6);
 
 /**
  * Roll the shared setup for a new online game: seed, randomly assigned tribes
@@ -80,7 +82,12 @@ export function configForNewGame(
     v: 1,
     engine: SAVE_VERSION,
     seed: Math.floor(rng() * 2 ** 31),
-    size: mapType === "globe" ? globeSizeForPlayers(total) : sizeForPlayers(total),
+    size:
+      mapType === "globe"
+        ? globeSizeForPlayers(total)
+        : mapType === "twin_globes"
+          ? twinSizeForPlayers(total)
+          : sizeForPlayers(total),
     mapType,
     winMode,
     difficulty,

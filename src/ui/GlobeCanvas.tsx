@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import { controller } from "../game/controller";
 import { GlobeRenderer, type GlobeView } from "../render/globe/globeRenderer";
-import { playerById } from "../engine/state";
+import { playerById, planetCount, planetOf } from "../engine/state";
 import { watchedMask } from "../engine/fog";
 import { handleBoardClick } from "./boardClick";
 
@@ -47,6 +47,8 @@ export default function GlobeCanvas() {
       if (selected !== null && !controller.aiBusy) {
         for (const a of controller.legal) {
           if (a.type === "MOVE" && a.unitId === selected) moves.push([a.x, a.y]);
+          // landing sites light up exactly like move targets, on the other globe
+          if (a.type === "LAND" && a.unitId === selected) moves.push([a.x, a.y]);
           if (a.type === "ATTACK" && a.unitId === selected) attackIds.push(a.targetId);
         }
       }
@@ -176,7 +178,12 @@ export default function GlobeCanvas() {
       endPointer(e);
       if (isTap) {
         const tile = pickAt(e.clientX, e.clientY);
-        if (tile) handleBoardClick(tile);
+        if (tile) {
+          // tapping the far globe swings the camera over to it
+          const s = controller.state;
+          if (s) globe.setActivePlanet(planetOf(s, tile[0]));
+          handleBoardClick(tile);
+        }
       }
     };
 
@@ -246,10 +253,22 @@ export default function GlobeCanvas() {
     };
   }, []);
 
+  const twin = controller.state !== null && planetCount(controller.state) > 1;
+
   return (
     <>
       <canvas ref={canvasRef} className="absolute inset-0 cursor-pointer touch-none select-none" />
       <div className="absolute bottom-3 right-3 flex flex-col gap-1.5">
+        {twin && (
+          <GlobeButton
+            label="⇄"
+            title="Switch world"
+            onPress={() => {
+              const g = globeRef.current;
+              if (g) g.setActivePlanet(1 - g.activePlanet);
+            }}
+          />
+        )}
         <GlobeButton label="+" title="Zoom in" onPress={() => globeRef.current?.zoomBy(1 / 1.3)} />
         <GlobeButton label="−" title="Zoom out" onPress={() => globeRef.current?.zoomBy(1.3)} />
       </div>
