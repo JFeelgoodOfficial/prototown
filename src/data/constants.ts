@@ -1,3 +1,5 @@
+import type { BuildingType, ResourceType, TerrainType } from "../engine/state";
+
 export const INITIAL_STARS = 5;
 export const ATTACK_ACCELERATOR = 4.5;
 export const DEFENCE_BONUS_TERRAIN = 1.5;
@@ -56,13 +58,69 @@ export const HARVEST_DEFS = {
   whale: { cost: 2, pop: 0, stars: WHALE_STARS, tech: "whaling" },
 } as const;
 
-export const BUILDING_DEFS = {
-  lumber_hut: { cost: 3, pop: 1, tech: "forestry", terrain: "forest" },
-  farm: { cost: 5, pop: 2, tech: "farming", terrain: "field", needsResource: "crop" },
-  mine: { cost: 5, pop: 2, tech: "mining", terrain: "mountain", needsResource: "metal" },
-  port: { cost: 7, pop: 1, tech: "sailing", terrain: "water" },
-  spaceport: { cost: 10, pop: 1, tech: "space_travel", terrain: "field" },
-} as const;
+export interface BuildingDef {
+  name: string;
+  cost: number;
+  /** population the site feeds on its own */
+  pop: number;
+  tech: string;
+  terrain: TerrainType;
+  /**
+   * A resource the site is worth more on top of. Without it the building still
+   * goes up — a mine cut into bare rock, a farm on ground that has already been
+   * cleared — it simply feeds `pop` instead of `pop + bonusPop`.
+   */
+  bonusResource?: ResourceType;
+  bonusPop?: number;
+  /** needs ground that has already given up its fruit: only a farm does */
+  needsTilled?: boolean;
+}
+
+export const BUILDING_DEFS: Record<BuildingType, BuildingDef> = {
+  lumber_hut: { name: "Lumber Hut", cost: 3, pop: 1, tech: "forestry", terrain: "forest" },
+  farm: { name: "Farm", cost: 5, pop: 1, tech: "farming", terrain: "field", bonusResource: "crop", bonusPop: 1, needsTilled: true },
+  mine: { name: "Mine", cost: 5, pop: 1, tech: "mining", terrain: "mountain", bonusResource: "metal", bonusPop: 1 },
+  port: { name: "Port", cost: 7, pop: 1, tech: "sailing", terrain: "water" },
+  naval_tower: { name: "Naval Tower", cost: 8, pop: 0, tech: "coastal_defence", terrain: "water" },
+  airfield: { name: "Airfield", cost: 10, pop: 1, tech: "flight", terrain: "field" },
+  flak_tower: { name: "Flak Tower", cost: 8, pop: 0, tech: "air_defence", terrain: "field" },
+  hospital: { name: "Hospital", cost: 8, pop: 2, tech: "medicine", terrain: "field" },
+  spaceport: { name: "Spaceport", cost: 10, pop: 1, tech: "space_travel", terrain: "field" },
+};
+
+/**
+ * Whether this building may go up on this tile. A building with a
+ * `bonusResource` may be raised on top of that resource; otherwise the ground
+ * has to be clear, because paving over an unharvested resource loses it.
+ */
+export function buildingFits(def: BuildingDef, terrain: TerrainType, resource: ResourceType | null, tilled: boolean): boolean {
+  if (def.terrain !== terrain) return false;
+  if (def.bonusResource !== undefined && resource === def.bonusResource) return true;
+  if (resource !== null) return false;
+  return !def.needsTilled || tilled;
+}
+
+/** Population the finished building feeds, richer on top of its bonus resource. */
+export function buildingPop(def: BuildingDef, resource: ResourceType | null): number {
+  return def.pop + (def.bonusResource !== undefined && resource === def.bonusResource ? (def.bonusPop ?? 0) : 0);
+}
+
+// Naval Towers: shore guns that shell enemy vessels, and watch the sea they cover.
+export const NAVAL_TOWER_RANGE = 4;
+export const NAVAL_TOWER_ATK = 4;
+
+// Flak Towers: fire on any enemy aircraft that flies inside their umbrella.
+export const FLAK_RANGE = 3;
+export const FLAK_DAMAGE = 6;
+
+// Hospitals and Medics: free healing at the start of your turn, no action spent.
+export const HOSPITAL_RANGE = 2;
+export const HOSPITAL_HEAL = 3;
+export const MEDIC_RANGE = 1;
+export const MEDIC_HEAL = 2;
+
+/** Stars to send settlers out and found a brand-new town on neutral ground. */
+export const FOUND_CITY_COST = 100;
 
 /**
  * City improvements you can buy outright once the tech is known. These are the

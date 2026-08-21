@@ -25,7 +25,7 @@ export default function TechTreeDialog({ onClose }: { onClose: () => void }) {
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
           {branches.map((root) => (
             <div key={root} className="space-y-2">
-              {TECHS.filter((t) => branchOf(t.id) === root && techAvailable(s.mapType, t.id)).map((tech) => {
+              {TECHS.filter((t) => t.branch === root && techAvailable(s.mapType, t.id)).map((tech) => {
                 const known = me.techs.includes(tech.id);
                 const prereqOk = !tech.requires || me.techs.includes(tech.requires);
                 const cost = techCost(tech.id, numCities, me.techs.includes("philosophy"));
@@ -64,16 +64,4 @@ export default function TechTreeDialog({ onClose }: { onClose: () => void }) {
       </div>
     </div>
   );
-}
-
-function branchOf(id: string): string {
-  const roots: Record<string, string> = {
-    riding: "riding", roads: "riding", free_spirit: "riding", trade: "riding", chivalry: "riding",
-    organization: "organization", farming: "organization", shields: "organization", construction: "organization", strategy: "organization",
-    climbing: "climbing", mining: "climbing", meditation: "climbing", smithery: "climbing", philosophy: "climbing",
-    fishing: "fishing", sailing: "fishing", whaling: "fishing", navigation: "fishing", aquatism: "fishing",
-    hunting: "hunting", archery: "hunting", forestry: "hunting", mathematics: "hunting", spiritualism: "hunting",
-    rocketry: "hunting", atomic_theory: "hunting", space_travel: "hunting",
-  };
-  return roots[id];
 }

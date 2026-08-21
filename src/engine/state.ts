@@ -3,7 +3,16 @@ import { sphereTopology } from "./topology";
 
 export type TerrainType = "field" | "forest" | "mountain" | "water" | "ocean" | "crater" | "void";
 export type ResourceType = "fruit" | "animal" | "fish" | "whale" | "metal" | "crop";
-export type BuildingType = "lumber_hut" | "farm" | "mine" | "port" | "spaceport";
+export type BuildingType =
+  | "lumber_hut"
+  | "farm"
+  | "mine"
+  | "port"
+  | "naval_tower"
+  | "airfield"
+  | "flak_tower"
+  | "hospital"
+  | "spaceport";
 
 export interface Tile {
   x: number;
@@ -19,6 +28,10 @@ export interface Tile {
   cityHere: number | null;
   /** unexplored ruin: the first unit to walk in claims what's inside */
   ruin: boolean;
+  /** field whose fruit has been picked: worked ground, and so farmable */
+  tilled: boolean;
+  /** turn a tower on this tile last fired, so each one fires once a turn */
+  firedTurn: number | null;
 }
 
 export interface City {
@@ -100,6 +113,17 @@ export interface GameState {
   scoreHistory: number[][];
   /** true once any player has fired the game's single nuke */
   nukeLaunched: boolean;
+  /** flak that just hit an aircraft, for the UI to announce; cleared each action */
+  lastFlakHit: FlakHit | null;
+}
+
+/** An aircraft caught by anti-air fire as it flew in. */
+export interface FlakHit {
+  unitId: number;
+  x: number;
+  y: number;
+  damage: number;
+  destroyed: boolean;
 }
 
 export type RuinRewardKind = "stars" | "tech" | "veteran" | "population" | "map";
@@ -207,6 +231,13 @@ export function citiesOf(state: GameState, playerId: number): City[] {
 
 export function unitsOf(state: GameState, playerId: number): Unit[] {
   return state.units.filter((u) => u.ownerId === playerId);
+}
+
+/** Tiles inside a player's borders carrying the given building. */
+export function buildingsOf(state: GameState, playerId: number, building: BuildingType): Tile[] {
+  return state.tiles.filter(
+    (t) => t.building === building && t.cityId !== null && cityById(state, t.cityId)?.ownerId === playerId,
+  );
 }
 
 export function hasTech(player: PlayerState, techId: string | null): boolean {

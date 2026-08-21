@@ -35,6 +35,7 @@ import {
 import { sprite, blit } from "../spriteCache";
 import { CELL_W, CELL_H, ATLAS_SIZE, cellOrigin, cellDiamondUv } from "./atlasLayout";
 import { drawCharacter } from "../unitArt";
+import { isAir } from "../../data/units";
 import { tribeById } from "../../data/tribes";
 import { TILE_W, TILE_H } from "../iso";
 
@@ -384,8 +385,14 @@ export class GlobeRenderer {
         view.revealAll || u.ownerId === view.viewerId || (view.explored[i] === 1 && view.watched[i] === 1);
       if (!visible) continue;
       const tex = this.unitTexture(u, u.id === view.selectedUnitId, attackable.has(u.id));
-      // an orbiting unit floats visibly higher above its launch pad
-      const lift = u.embarked === "orbit" ? this.tileDiag * 0.85 : this.tileDiag * 0.3;
+      // an orbiting unit floats visibly higher above its launch pad, and an
+      // aircraft sits between the two: clear of the ground, short of space
+      const lift =
+        u.embarked === "orbit"
+          ? this.tileDiag * 0.85
+          : isAir(u.type)
+            ? this.tileDiag * 0.55
+            : this.tileDiag * 0.3;
       place(i, tex, 128 / 96, this.tileDiag * 0.62, lift);
     }
     this.needsRender = true;

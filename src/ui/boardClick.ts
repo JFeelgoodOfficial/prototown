@@ -10,6 +10,23 @@ export function handleBoardClick([x, y]: [number, number]): void {
   if (!s || controller.aiBusy || !isPlayable(s, x, y)) return;
   if (controller.legal.some((a) => a.type === "CHOOSE_REWARD")) return; // modal open
 
+  // A selected Naval Tower fires by tapping the vessel it should shell, the
+  // same gesture as attacking with a unit.
+  const tower = controller.selectedTile;
+  if (tower) {
+    const target = unitAt(s, x, y);
+    const shot = target
+      ? controller.legal.find(
+          (a) => a.type === "BOMBARD" && a.x === tower[0] && a.y === tower[1] && a.targetId === target.id,
+        )
+      : undefined;
+    if (shot) {
+      controller.dispatch(shot);
+      controller.selectTile(tower);
+      return;
+    }
+  }
+
   const selected = controller.selectedUnitId;
   if (selected !== null) {
     const move = controller.legal.find((a) => a.type === "MOVE" && a.unitId === selected && a.x === x && a.y === y);

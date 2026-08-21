@@ -1157,6 +1157,134 @@ function drawBuilding(ctx: Ctx, building: BuildingType, k: TribeKit): void {
     return;
   }
 
+  if (building === "naval_tower") {
+    /* naval tower: a gun platform on piles, its barrel run out over the water */
+    for (let i = -1; i <= 1; i++) {
+      limb(ctx, [i * 8, 9], [i * 7, -2], 1.8, 1.6, MAT.woodLo, { hi: MAT.wood, lo: "#231708" });
+      ctx.beginPath();
+      ctx.ellipse(i * 8, 9, 4.4, 1.8, 0, 0, Math.PI * 2);
+      ctx.strokeStyle = "rgba(228,248,255,0.4)";
+      ctx.lineWidth = 1;
+      ctx.stroke();
+    }
+    castShadow(ctx, 5, 7, 19, 6, 0.3);
+    plate(ctx, [[-13, -2], [13, -2], [15, 2], [-15, 2]], "#8d8a84", { hi: "#c0bcb4", lo: "#3a3834", rimA: 0.4 });
+    // squat stone drum with a firing step around it
+    plate(ctx, [[-10, -18], [10, -18], [11, -2], [-11, -2]], "#9c948a", { hi: "#cdc5b8", lo: "#403b34", rimA: 0.4, horiz: true });
+    for (let i = 0; i < 3; i++) stroke(ctx, [[-10.5, -14 + i * 4], [10.5, -14 + i * 4]], "rgba(40,34,28,0.28)", 0.9);
+    for (let i = -2; i <= 2; i++) {
+      plate(ctx, [[i * 4.4 - 1.6, -22], [i * 4.4 + 1.6, -22], [i * 4.4 + 1.6, -18], [i * 4.4 - 1.6, -18]], "#a8a096", {
+        hi: "#d8d0c2",
+        lo: "#44403a",
+        rimA: 0.35,
+      });
+    }
+    // sandbagged emplacement and the gun itself, laid out to sea
+    ([[-6, -24], [-2, -25], [2, -24]] as Array<[number, number]>).forEach(([dx, dy]) => {
+      orb(ctx, dx, dy, 3.2, 2, "#a8916a", { hi: "#d6c095", lo: "#59492c" });
+    });
+    orb(ctx, 3, -25, 4.4, 3.4, dk(k.metal, 0.1), { hi: k.metalHi, lo: "#20232d" });
+    limb(ctx, [3, -26], [20, -33], 2.4, 1.9, MAT.iron, { hi: MAT.ironHi, lo: MAT.ironLo });
+    plate(ctx, [[18, -31], [22, -32.4], [22.6, -34.6], [18.6, -33.2]], dk(k.metal, 0.3), { hi: k.metalHi, rimA: 0.3 });
+    // shot ready by the breech, and the tribe's colours over the platform
+    orb(ctx, -9, -24, 2, 2, "#3f4753", { hi: "#8d97a4" });
+    limb(ctx, [-12, -20], [-12, -40], 1.1, 0.9, MAT.wood, { hi: MAT.woodHi, lo: MAT.woodLo });
+    cloth(ctx, [[-12, -39], [-12, -30], [-2, -32]], k.color, 2);
+    tribeMark(ctx, k, 12, -2);
+    return;
+  }
+
+  if (building === "airfield") {
+    /* airfield: a strip scored into the ground, a hangar, and a plane at rest */
+    trampledGround(ctx, 22, 9);
+    castShadow(ctx, 7, 6, 20, 6, 0.3);
+    plate(ctx, [[-17, 0], [13, 0], [17, 8], [-13, 8]], "#8d8a84", { hi: "#c0bcb4", lo: "#3a3834", rimA: 0.4 });
+    for (let i = 0; i < 4; i++) stroke(ctx, [[-11 + i * 7, 4.2], [-8 + i * 7, 4.2]], "rgba(248,244,232,0.55)", 1.2);
+    // arched hangar with the doors rolled open
+    plate(ctx, [[-19, -2], [-19, -12], [-13, -17], [-5, -17], [0, -12], [0, -2]], "#9c948a", {
+      hi: "#cdc5b8",
+      lo: "#403b34",
+      rimA: 0.4,
+    });
+    plate(ctx, [[-19, -12], [-13, -17], [-5, -17], [0, -12]], dk(k.color, 0.15), { hi: lt(k.color, 0.35), lo: dk(k.color, 0.55), rimA: 0.35 });
+    plate(ctx, [[-15, -3], [-4, -3], [-4, -12], [-15, -12]], "#1b1a1f", { hi: "#3b3944", lo: "#0b0a0d", rimA: 0.3 });
+    litWindow(ctx, -12, -9, 3, 2.4);
+    // the aircraft on the apron: wing, tail, nose, propeller disc
+    plate(ctx, [[2, -3], [18, -3], [21, -6], [17, -8], [3, -7]], "#d5dbe2", { hi: "#ffffff", lo: "#6a7178", rimA: 0.4, spec: true });
+    plate(ctx, [[4, -8], [16, -8.6], [16, -6.4], [4, -6]], "#e2e7ec", { hi: "#ffffff", lo: "#79818a", rimA: 0.35, horiz: true });
+    plate(ctx, [[2, -6], [4, -13], [8, -13], [7, -6]], k.color, { hi: lt(k.color, 0.4), lo: dk(k.color, 0.5), rimA: 0.35 });
+    ctx.fillStyle = "rgba(216,226,236,0.35)";
+    ctx.beginPath();
+    ctx.ellipse(21.6, -5.6, 1.2, 5.4, 0, 0, Math.PI * 2);
+    ctx.fill();
+    orb(ctx, 8, -2.4, 1.5, 1.5, "#2a2724", { hi: "#5c5651" });
+    orb(ctx, 15, -2.4, 1.5, 1.5, "#2a2724", { hi: "#5c5651" });
+    // windsock: the reason anyone can fly out of here at all
+    limb(ctx, [-22, 2], [-22, -16], 1, 0.8, MAT.wood, { hi: MAT.woodHi, lo: MAT.woodLo });
+    cloth(ctx, [[-22, -15], [-13, -13], [-22, -10]], k.trim, 2);
+    tribeMark(ctx, k, -21, 4);
+    return;
+  }
+
+  if (building === "flak_tower") {
+    /* flak tower: a concrete tub, sandbags, and a barrel cranked at the sky */
+    trampledGround(ctx, 18, 7);
+    castShadow(ctx, 8, 5, 17, 5, 0.32);
+    plate(ctx, [[-13, -1], [11, -1], [14, 5], [-11, 5]], "#8d8a84", { hi: "#c0bcb4", lo: "#3a3834", rimA: 0.4 });
+    plate(ctx, [[-11, -16], [9, -16], [10, -1], [-12, -1]], "#8f8b83", { hi: "#c3bbae", lo: "#3c3833", rimA: 0.4, horiz: true });
+    for (let i = 0; i < 2; i++) stroke(ctx, [[-11.5, -11 + i * 5], [9.5, -11 + i * 5]], "rgba(40,34,28,0.26)", 0.9);
+    ([[-9, -19], [-4, -20], [1, -20], [6, -19]] as Array<[number, number]>).forEach(([dx, dy]) => {
+      orb(ctx, dx, dy, 3.4, 2.1, "#a8916a", { hi: "#d6c095", lo: "#59492c" });
+    });
+    // mount, twin barrels at high elevation, and the ammunition beside them
+    orb(ctx, -1, -21, 4.6, 3.4, dk(k.metal, 0.1), { hi: k.metalHi, lo: "#20232d" });
+    limb(ctx, [-1, -22], [11, -40], 2, 1.4, MAT.iron, { hi: MAT.ironHi, lo: MAT.ironLo });
+    limb(ctx, [-2.6, -22], [8.6, -40], 2, 1.4, MAT.iron, { hi: MAT.ironHi, lo: MAT.ironLo });
+    stroke(ctx, [[9.6, -40.6], [10.6, -43.4]], "rgba(255,214,150,0.5)", 2.4);
+    plate(ctx, [[-8, -22], [-3, -22], [-3, -30], [-8, -30]], dk(k.metal, 0.25), { hi: k.metalHi, lo: "#1c1f26", rimA: 0.35, spec: true });
+    ([[-13, -3], [-16, -1]] as Array<[number, number]>).forEach(([dx, dy]) => {
+      plate(ctx, [[dx - 2.4, dy - 4], [dx + 2.4, dy - 4], [dx + 2.4, dy], [dx - 2.4, dy]], "#5b6b4a", {
+        hi: "#8ea173",
+        lo: "#2a3320",
+        rimA: 0.35,
+      });
+    });
+    tribeMark(ctx, k, 14, 2);
+    return;
+  }
+
+  if (building === "hospital") {
+    /* hospital: whitewashed ward, lantern-lit windows, herb sprig over the door */
+    trampledGround(ctx, 20, 8);
+    castShadow(ctx, 10, 5, 17, 5, 0.32);
+    ao(ctx, 0, 4, 17, 0.28);
+    wall(ctx, -12, -9, 24, 13, "#d9d3c6");
+    for (let i = 0; i < 3; i++) stroke(ctx, [[-12, -5 + i * 4], [12, -5 + i * 4]], "rgba(90,84,74,0.16)", 0.9);
+    roof(ctx, 0, -9, 15, 10, k.color);
+    // doorway with an awning over the step, for the stretchers coming in
+    plate(ctx, [[-4, -3], [4, -3], [4, 4], [-4, 4]], "#3a2a1d", { hi: "#6a4d33", lo: "#170f0a", rimA: 0.3 });
+    plate(ctx, [[-7, -4], [7, -4], [5, -8], [-5, -8]], k.trim, { hi: lt(k.trim, 0.3), lo: dk(k.trim, 0.5), rimA: 0.35 });
+    // the healers' sign: a pale sprig, the same one the medics carry
+    stroke(ctx, [[0, -9], [0, -14]], "#e6f0dc", 1.5);
+    stroke(ctx, [[0, -11.5], [-3.4, -13.6]], "#e6f0dc", 1.3);
+    stroke(ctx, [[0, -11.5], [3.4, -13.6]], "#e6f0dc", 1.3);
+    litWindow(ctx, -10, -6.4, 4, 3.2);
+    litWindow(ctx, 6.4, -6.4, 4, 3.2);
+    // water butt and folded stretchers stacked against the gable
+    orb(ctx, -16, 2.6, 3.4, 2.2, MAT.wood, { hi: MAT.woodHi, lo: MAT.woodLo });
+    orb(ctx, -16, 1.8, 3, 1.6, "#5f8fa8", { rim: false });
+    for (let i = 0; i < 2; i++) {
+      plate(ctx, [[14, 2 - i * 3.4], [20, 2 - i * 3.4], [20, 4 - i * 3.4], [14, 4 - i * 3.4]], "#e8e2d4", {
+        hi: "#ffffff",
+        lo: "#9a9285",
+        rimA: 0.3,
+      });
+    }
+    smoke(ctx, 8, -19, 3);
+    tribeMark(ctx, k, -15, -6);
+    return;
+  }
+
   /* lumber hut: stacked-log walls, plank roof, cut stack, stump and axe */
   trampledGround(ctx, 20, 8);
   castShadow(ctx, 11, 5, 16, 5, 0.32);

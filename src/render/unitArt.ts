@@ -761,6 +761,18 @@ function horse(ctx: Ctx, k: TribeKit, opts: { barded?: boolean } = {}): void {
 }
 
 /* ───────────── unit builds ───────────── */
+/** The column of thin air an aircraft hangs in, down to the ground below it. */
+function aloft(ctx: Ctx, top: number): void {
+  for (let i = 0; i < 3; i++) {
+    ctx.beginPath();
+    ctx.ellipse(0, -4 - i * 6, 13 - i * 3.5, 4 - i, 0, 0, Math.PI * 2);
+    ctx.strokeStyle = `rgba(190,208,224,${0.22 - i * 0.06})`;
+    ctx.lineWidth = 1.4;
+    ctx.stroke();
+  }
+  stroke(ctx, [[0, -10], [0, top]], "rgba(190,208,224,0.16)", 2);
+}
+
 const BUILD: Record<ArtUnitType, (ctx: Ctx, k: TribeKit) => void> = {
   warrior(ctx, k) {
     groundShadow(ctx, 30, 11);
@@ -1004,6 +1016,117 @@ const BUILD: Record<ArtUnitType, (ctx: Ctx, k: TribeKit) => void> = {
     ctx.restore();
     water(ctx);
   },
+
+  /* medic: no weapon at all — a satchel of dressings and a herb-bundle staff */
+  medic(ctx, k) {
+    groundShadow(ctx, 27, 10);
+    const b = body(ctx, k, { bulk: 0.9, cape: true });
+    // satchel on a shoulder strap, the healer's pale sprig stitched to the flap
+    stroke(ctx, [[-9, -76], [12, -50]], MAT.leather, 3.4);
+    plate(ctx, [[9, -56], [23, -56], [23, -42], [9, -42]], MAT.leather, { hi: MAT.leatherHi, lo: "#2e1d10", rimA: 0.4 });
+    plate(ctx, [[9, -56], [23, -56], [23, -51], [9, -51]], dk(MAT.leather, 0.25), { hi: MAT.leatherHi, rimA: 0.3 });
+    stroke(ctx, [[16, -50], [16, -44]], "#e6f0dc", 1.6);
+    stroke(ctx, [[16, -47], [12, -45]], "#e6f0dc", 1.4);
+    stroke(ctx, [[16, -47], [20, -45]], "#e6f0dc", 1.4);
+    // rolled bandages tucked into the belt
+    ([[-13, -50], [-18, -46]] as Pt[]).forEach(([x, y]) => {
+      orb(ctx, x, y, 3.4, 3, "#e8e2d4", { hi: "#ffffff", lo: "#9a9285" });
+      stroke(ctx, [[x - 2.6, y], [x + 2.6, y - 0.6]], "rgba(120,112,100,0.5)", 0.9);
+    });
+    arm(ctx, k, [b.shW + 1, -b.sh + 4], [19, -60], [19, -72], b.bulk, { bracer: true });
+    arm(ctx, k, [-b.shW - 1, -b.sh + 4], [-18, -66], [-17, -74], b.bulk, { bracer: true });
+    // staff, hung with a lantern and a bundle of drying herbs
+    limb(ctx, [-19, -4], [-19, -96], 1.5, 1.2, MAT.wood, { hi: MAT.woodHi, lo: MAT.woodLo });
+    stroke(ctx, [[-19, -92], [-9, -90]], MAT.woodLo, 1.2);
+    plate(ctx, [[-13, -90], [-5, -90], [-5, -80], [-13, -80]], dk(k.metal, 0.1), { hi: k.metalHi, lo: "#20232a", rimA: 0.4 });
+    ctx.fillStyle = RG(ctx, -9, -85, 12, [[0, "rgba(255,226,160,0.85)"], [0.5, "rgba(255,196,110,0.3)"], [1, "rgba(255,196,110,0)"]]);
+    ctx.beginPath();
+    ctx.ellipse(-9, -85, 12, 12, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = "rgba(255,230,170,0.9)";
+    ctx.fillRect(-11.6, -88.4, 5.2, 6.8);
+    for (let i = 0; i < 4; i++) {
+      const a = -0.4 - i * 0.34;
+      stroke(ctx, [[-19, -70], [-19 + Math.cos(a) * 11, -70 + Math.sin(a) * 12]], "#7fa262", 1.5);
+    }
+    k.accent(ctx, 32, -84);
+  },
+
+  /* scout plane: high-wing monoplane loitering over the tile it is watching */
+  scout_plane(ctx, k) {
+    groundShadow(ctx, 26, 9);
+    aloft(ctx, -30);
+    const cy = -74;
+    // tailplane and fin first, so the fuselage overlaps them
+    plate(ctx, [[-50, cy + 3], [-26, cy + 2], [-26, cy - 2], [-50, cy - 2]], "#b9c1c9", { hi: MAT.steelHi, lo: MAT.steelLo, rimA: 0.4 });
+    plate(ctx, [[-46, cy - 1], [-40, cy - 24], [-30, cy - 24], [-28, cy - 1]], k.color, { hi: lt(k.color, 0.45), lo: dk(k.color, 0.5), rimA: 0.4 });
+    // fuselage
+    plate(
+      ctx,
+      [[-48, cy + 2], [-30, cy + 7], [20, cy + 8], [36, cy + 2], [36, cy - 4], [18, cy - 9], [-30, cy - 6], [-48, cy - 2]],
+      "#d5dbe2",
+      { hi: "#ffffff", lo: "#6a7178", rimA: 0.45, spec: true, specA: 0.5 },
+    );
+    // glazed observation canopy: this aircraft is all eyes
+    plate(ctx, [[2, cy - 8], [20, cy - 8], [16, cy - 18], [0, cy - 18]], "#2b4c66", { hi: "#a9dcf2", lo: "#12283a", rimA: 0.35, spec: true, specA: 0.8 });
+    spec(ctx, 8, cy - 15, 5, 2.6, -0.2, 0.65);
+    // high wing on its struts
+    stroke(ctx, [[-4, cy - 7], [-8, cy - 18]], "#7d858e", 1.6);
+    stroke(ctx, [[14, cy - 8], [12, cy - 18]], "#7d858e", 1.6);
+    plate(ctx, [[-26, cy - 18], [30, cy - 20], [30, cy - 14], [-26, cy - 13]], "#e2e7ec", { hi: "#ffffff", lo: "#79818a", rimA: 0.4, horiz: true });
+    plate(ctx, [[16, cy - 19], [30, cy - 20], [30, cy - 14], [16, cy - 14]], k.color, { hi: lt(k.color, 0.4), lo: dk(k.color, 0.5), rimA: 0.3 });
+    // tribe roundel on the flank
+    orb(ctx, -14, cy, 5, 5, k.color, { hi: lt(k.color, 0.5), lo: dk(k.color, 0.5) });
+    orb(ctx, -14, cy, 2.2, 2.2, "#f6f2e6", { rim: false });
+    // nose, engine cowl and the disc of the turning propeller
+    plate(ctx, [[36, cy + 2], [42, cy], [42, cy - 3], [36, cy - 4]], dk(k.metal, 0.1), { hi: k.metalHi, lo: "#20232d", rimA: 0.4, spec: true });
+    ctx.fillStyle = "rgba(216,226,236,0.32)";
+    ctx.beginPath();
+    ctx.ellipse(44, cy - 1, 3, 17, 0, 0, Math.PI * 2);
+    ctx.fill();
+    stroke(ctx, [[44, cy - 17], [44, cy + 15]], "rgba(150,166,182,0.5)", 1.4);
+    // fixed undercarriage
+    stroke(ctx, [[2, cy + 8], [-2, cy + 18]], "#7d858e", 1.8);
+    stroke(ctx, [[16, cy + 8], [18, cy + 18]], "#7d858e", 1.8);
+    orb(ctx, -2, cy + 19, 3.4, 3.4, "#2a2724", { hi: "#5c5651" });
+    orb(ctx, 18, cy + 19, 3.4, 3.4, "#2a2724", { hi: "#5c5651" });
+    k.accent(ctx, 40, cy - 30);
+  },
+
+  /* bomber: twin engines, bay doors open, one bomb already on its way down */
+  bomber(ctx, k) {
+    groundShadow(ctx, 34, 12);
+    aloft(ctx, -26);
+    const cy = -80;
+    plate(ctx, [[-56, cy + 4], [-28, cy + 3], [-28, cy - 3], [-56, cy - 3]], "#b9c1c9", { hi: MAT.steelHi, lo: MAT.steelLo, rimA: 0.4 });
+    plate(ctx, [[-52, cy - 2], [-46, cy - 28], [-34, cy - 28], [-30, cy - 2]], k.color, { hi: lt(k.color, 0.45), lo: dk(k.color, 0.5), rimA: 0.4 });
+    // heavy fuselage, deeper in the belly than the scout's
+    plate(
+      ctx,
+      [[-54, cy + 2], [-32, cy + 11], [22, cy + 12], [42, cy + 3], [42, cy - 6], [20, cy - 12], [-32, cy - 8], [-54, cy - 2]],
+      "#4f5a63",
+      { hi: "#9aa8b4", lo: "#232a30", rimA: 0.45, spec: true, specA: 0.35 },
+    );
+    plate(ctx, [[6, cy - 11], [22, cy - 11], [18, cy - 20], [4, cy - 20]], "#22384a", { hi: "#8cc4de", lo: "#0f1e2a", rimA: 0.35, spec: true, specA: 0.7 });
+    // low wing carrying both engine nacelles
+    plate(ctx, [[-34, cy - 4], [34, cy - 6], [34, cy + 1], [-34, cy + 3]], "#5c6873", { hi: "#a2b0bc", lo: "#262d33", rimA: 0.4, horiz: true });
+    ([-12, 14] as number[]).forEach((ex) => {
+      plate(ctx, [[ex - 9, cy - 8], [ex + 9, cy - 8], [ex + 11, cy + 1], [ex - 9, cy + 1]], dk(k.metal, 0.05), { hi: k.metalHi, lo: "#20232d", rimA: 0.4, spec: true });
+      ctx.fillStyle = "rgba(216,226,236,0.3)";
+      ctx.beginPath();
+      ctx.ellipse(ex + 13, cy - 4, 2.6, 14, 0, 0, Math.PI * 2);
+      ctx.fill();
+    });
+    // open bomb bay and the bomb falling out of it
+    plate(ctx, [[-6, cy + 11], [10, cy + 11], [10, cy + 14], [-6, cy + 14]], "#161c21", { hi: "#39434c", lo: "#0a0d10", rimA: 0.3 });
+    stroke(ctx, [[-6, cy + 14], [-12, cy + 20]], "#5c6873", 1.6);
+    stroke(ctx, [[10, cy + 14], [16, cy + 20]], "#5c6873", 1.6);
+    orb(ctx, 2, cy + 26, 4, 7.5, "#3f4753", { hi: "#8d97a4", lo: "#1a1e25" });
+    plate(ctx, [[-1.5, cy + 32], [5.5, cy + 32], [4, cy + 38], [0, cy + 38]], k.color, { hi: lt(k.color, 0.4), lo: dk(k.color, 0.5), rimA: 0.3 });
+    orb(ctx, -22, cy, 5, 5, k.color, { hi: lt(k.color, 0.5), lo: dk(k.color, 0.5) });
+    orb(ctx, -22, cy, 2.2, 2.2, "#f6f2e6", { rim: false });
+    k.accent(ctx, 46, cy - 32);
+  },
 };
 
 function water(ctx: Ctx): void {
@@ -1023,6 +1146,7 @@ function water(ctx: Ctx): void {
 export const TOPS: Record<ArtUnitType, number> = {
   warrior: -138, defender: -138, swordsman: -142, archer: -134,
   rider: -124, knight: -132, catapult: -132, missile: -140, giant: -200, raft: -122, ship: -114,
+  medic: -140, scout_plane: -116, bomber: -122,
 };
 
 /** Figures are authored 100 units tall; this fits them to the tile scale. */
@@ -1032,6 +1156,7 @@ export const FIT = 0.55;
 const HALF_WIDTHS: Record<ArtUnitType, number> = {
   warrior: 42, defender: 56, swordsman: 42, archer: 56,
   rider: 52, knight: 70, catapult: 76, missile: 76, giant: 72, raft: 68, ship: 78,
+  medic: 46, scout_plane: 52, bomber: 62,
 };
 
 /** Largest scale that keeps a figure of this type inside a w x h box. */

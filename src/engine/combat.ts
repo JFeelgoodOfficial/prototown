@@ -1,7 +1,8 @@
-import type { GameState, Unit } from "./state";
+import type { GameState, Tile, Unit } from "./state";
 import { tileAt, playerById, hasTech, cityById, dist } from "./state";
 import { UNITS, NAVAL, ORBIT } from "../data/units";
 import {
+  NAVAL_TOWER_ATK,
   ATTACK_ACCELERATOR,
   DEFENCE_BONUS_TERRAIN,
   DEFENCE_BONUS_WALLS,
@@ -96,7 +97,10 @@ export function resolveCombat(state: GameState, attacker: Unit, defender: Unit):
   const atk = unitAtk(attacker);
   const def = unitDef(defender);
   const attackForce = atk * (attacker.hp / attacker.maxHp);
-  const defenceForce = def * (defender.hp / defender.maxHp) * defenceBonus(state, defender);
+  // A bomber strikes straight down: the walls and the treeline it is flying
+  // over are no cover at all, so only the defender's own toughness counts.
+  const cover = UNITS[attacker.type].ignoresCover && attacker.embarked === null ? 1 : defenceBonus(state, defender);
+  const defenceForce = def * (defender.hp / defender.maxHp) * cover;
   const total = attackForce + defenceForce;
 
   const damageMultiplier = abilityOf(state, attacker.ownerId).damageMultiplier * flankBonus(state, attacker, defender);
@@ -117,4 +121,19 @@ export function resolveCombat(state: GameState, attacker: Unit, defender: Unit):
   }
 
   return { damageToDefender, damageToAttacker, defenderDies, attackerDies };
+}
+
+/**
+ * Damage a Naval Tower's guns do to a vessel out at sea. The tower is a fixed
+ * emplacement at full strength, so it has no health term of its own and takes
+ * no return fire — a ship cannot shoot back at a battery it is only sailing past.
+ */
+export function bombardDamage(state: GameState, tower: Tile, target: Unit): number {
+  const attackForce = NAVAL_TOWER_ATK;
+  const defenceForce = unitDef(target) * (target.hp / target.maxHp) * defenceBonus(state, target);
+  const owner = cityById(state, tower.cityId!)!.ownerId;
+  const multiplier = abilityOf(state, owner).damageMultiplier;
+  return Math.round(
+    (attackForce / (attackForce + defenceForce)) * NAVAL_TOWER_ATK * ATTACK_ACCELERATOR * multiplier,
+  );
 }

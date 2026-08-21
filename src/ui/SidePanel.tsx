@@ -1,8 +1,14 @@
 import { useState } from "react";
 import { useGame } from "./store";
-import { unitById, tileAt, cityById, unitAt, type GameState } from "../engine/state";
+import { unitById, tileAt, cityById, unitAt, type GameState, type Tile } from "../engine/state";
 import { UNITS, NAVAL, ORBIT, type UnitType } from "../data/units";
-import { HARVEST_DEFS, CITY_IMPROVEMENTS } from "../data/constants";
+import {
+  HARVEST_DEFS,
+  CITY_IMPROVEMENTS,
+  BUILDING_DEFS,
+  FOUND_CITY_COST,
+  NAVAL_TOWER_RANGE,
+} from "../data/constants";
 import { cityIncome, popForNextLevel, cityUnitCount, cityCapacity } from "../engine/economy";
 import UnitPortrait from "./UnitPortrait";
 import type { Action } from "../engine/actions";
@@ -46,6 +52,11 @@ export default function SidePanel() {
             {inOrbit && (
               <div className="text-xs text-amber-300">
                 In orbit — tap a lit tile on the other world to land.
+              </div>
+            )}
+            {def.air && (
+              <div className="text-xs text-sky-300">
+                Flies over anything — but holds no ground, and enemy flak fires on it.
               </div>
             )}
           </div>
@@ -137,13 +148,22 @@ export default function SidePanel() {
     }
 
     const tileActs = game.legal.filter(
-      (a) => (a.type === "HARVEST" || a.type === "BUILD") && a.x === x && a.y === y,
+      (a) => (a.type === "HARVEST" || a.type === "BUILD" || a.type === "BOMBARD") && a.x === x && a.y === y,
     );
     if (tileActs.length > 0 || tile.resource || tile.building) {
+      const tower = tile.building === "naval_tower";
+      const fired = tower && tile.firedTurn === s.turn;
       return (
-        <Panel title={describeTile(tile.terrain, tile.resource, tile.building)}>
+        <Panel title={describeTile(tile)}>
+          {tower && (
+            <div className="text-xs text-white/60">
+              {fired
+                ? "The guns have fired this turn — they reload by your next one."
+                : `Shells enemy ships up to ${NAVAL_TOWER_RANGE} tiles out, once a turn. Tap a ship in range to fire.`}
+            </div>
+          )}
           <div className="mt-1 flex flex-wrap gap-2">
-            {tileActs.length === 0 && (
+            {tileActs.length === 0 && !tower && (
               <span className="text-xs text-white/50">
                 {tile.cityId === null ? "Outside your territory." : "Nothing to do here yet."}
               </span>
@@ -224,8 +244,17 @@ function labelFor(a: Action, s: GameState): string {
       const payout = def.stars > 0 ? ` → ⭐${def.stars}` : "";
       return `Harvest ${resource} (⭐${def.cost})${payout}`;
     }
-    case "BUILD":
-      return `Build ${a.building.replace("_", " ")}`;
+    case "BUILD": {
+      const def = BUILDING_DEFS[a.building];
+      return `${def.name} (⭐${def.cost})`;
+    }
+    case "BOMBARD": {
+      const target = unitById(s, a.targetId);
+      const mode = target?.embarked === "ship" ? "Ship" : "Raft";
+      return `💥 Fire on ${mode}`;
+    }
+    case "FOUND_CITY":
+      return `🏙 Found town (⭐${FOUND_CITY_COST})`;
     case "BUILD_IMPROVEMENT": {
       const def = CITY_IMPROVEMENTS[a.improvement];
       return `${def.name} (⭐${def.cost})`;
@@ -241,10 +270,11 @@ function labelFor(a: Action, s: GameState): string {
   }
 }
 
-function describeTile(terrain: string, resource: string | null, building: string | null): string {
-  const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1).replace("_", " ");
-  let title = cap(terrain);
-  if (resource) title += ` · ${cap(resource)}`;
-  if (building) title += ` · ${cap(building)}`;
+function describeTile(tile: Tile): string {
+  const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+  let title = cap(tile.terrain);
+  if (tile.resource) title += ` · ${cap(tile.resource)}`;
+  else if (tile.tilled && tile.building === null) title += " · Tilled";
+  if (tile.building) title += ` · ${BUILDING_DEFS[tile.building].name}`;
   return title;
 }

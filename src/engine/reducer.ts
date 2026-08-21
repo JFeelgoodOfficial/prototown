@@ -16,15 +16,16 @@ import {
   planetOf,
 } from "./state";
 import type { Action } from "./actions";
-import { resolveCombat, unitRange } from "./combat";
+import { bombardDamage, resolveCombat, unitRange } from "./combat";
 import { terrainOpenTo } from "./movement";
 import { computeVisibility } from "./fog";
+import { applyMedicalCare, flakFireAt } from "./support";
 import { claimTerritory } from "./mapgen";
 import { updateWinState } from "./win";
 import { playerScore } from "./score";
 import { addPopulation, playerIncome } from "./economy";
 import { nextInt } from "./rng";
-import { UNITS, NAVAL } from "../data/units";
+import { UNITS, NAVAL, isAir } from "../data/units";
 import { TERRAIN } from "../data/terrain";
 import { techCost, TECHS, techAvailable } from "../data/techs";
 import { tribeById } from "../data/tribes";
@@ -32,6 +33,8 @@ import {
   HARVEST_DEFS,
   BUILDING_DEFS,
   CITY_IMPROVEMENTS,
+  FOUND_CITY_COST,
+  buildingPop,
   RECOVER_HEAL,
   RECOVER_HEAL_OWN_TERRITORY,
   REWARD_STARS_AMOUNT,
@@ -54,25 +57,33 @@ export function applyAction(prev: GameState, action: Action): GameState {
   const state = cloneState(prev);
   const player = playerById(state, state.currentPlayerId);
   state.lastRuinReward = null;
+  state.lastFlakHit = null;
 
   switch (action.type) {
     case "MOVE": {
       const unit = mustUnit(state, action.unitId);
       const to = tileAt(state, action.x, action.y);
       const toWater = TERRAIN[to.terrain].water;
-      if (unit.embarked === null && toWater) {
-        // Boarding happens on the port tile itself (movement enforces it).
-        // A player who knows Sailing puts out a Ship directly, so the tech
-        // pays off at the dock instead of only as a paid refit.
-        unit.embarked = hasTech(player, "sailing") ? "ship" : "raft";
-      } else if (unit.embarked !== null && !toWater) {
-        unit.embarked = null;
+      // An aircraft is over the tile rather than on it, so the water beneath
+      // it never puts it aboard anything.
+      if (!isAir(unit.type)) {
+        if (unit.embarked === null && toWater) {
+          // Boarding happens on the port tile itself (movement enforces it).
+          // A player who knows Sailing puts out a Ship directly, so the tech
+          // pays off at the dock instead of only as a paid refit.
+          unit.embarked = hasTech(player, "sailing") ? "ship" : "raft";
+        } else if (unit.embarked !== null && !toWater) {
+          unit.embarked = null;
+        }
       }
       unit.x = action.x;
       unit.y = action.y;
       unit.moved = true;
       unit.fortified = false; // leaving the position gives up the dug-in bonus
-      if (to.ruin) claimRuin(state, unit, to);
+      // Aircraft take no prizes off the ground they overfly; what they can
+      // pick up is anti-air fire from anyone whose batteries reach them.
+      if (isAir(unit.type)) takeFlakFire(state, unit);
+      else if (to.ruin) claimRuin(state, unit, to);
       computeVisibility(state, player);
       break;
     }
@@ -117,25 +128,7 @@ export function applyAction(prev: GameState, action: Action): GameState {
 
       if (tile.village) {
         tile.village = false;
-        const tribe = tribeById(player.tribeId);
-        const nameIdx = citiesOf(state, player.id).length % tribe.cityNames.length;
-        const city: City = {
-          id: state.nextId++,
-          x: unit.x,
-          y: unit.y,
-          ownerId: player.id,
-          name: tribe.cityNames[nameIdx],
-          level: 1,
-          population: 0,
-          isCapital: false,
-          walls: false,
-          workshop: false,
-          parks: 0,
-          spaceStation: false,
-          borderRadius: 1,
-          pendingReward: null,
-        };
-        state.cities.push(city);
+        const city = foundCity(state, player, unit.x, unit.y);
         tile.cityHere = city.id;
         claimTerritory(state, city);
         unit.homeCityId = city.id;
@@ -215,6 +208,8 @@ export function applyAction(prev: GameState, action: Action): GameState {
       const def = HARVEST_DEFS[tile.resource as keyof typeof HARVEST_DEFS];
       player.stars -= def.cost;
       player.stars += def.stars;
+      // ground cleared of its orchard is ground a plough can turn over
+      if (tile.resource === "fruit") tile.tilled = true;
       tile.resource = null;
       // a whale is a payday, not a settlement — it feeds nobody
       if (def.pop > 0) addPopulation(cityById(state, tile.cityId!)!, def.pop);
@@ -226,8 +221,9 @@ export function applyAction(prev: GameState, action: Action): GameState {
       const def = BUILDING_DEFS[action.building];
       player.stars -= def.cost;
       tile.building = action.building;
+      const fed = buildingPop(def, tile.resource);
       tile.resource = null;
-      addPopulation(cityById(state, tile.cityId!)!, def.pop);
+      addPopulation(cityById(state, tile.cityId!)!, fed);
       break;
     }
 
@@ -271,6 +267,33 @@ export function applyAction(prev: GameState, action: Action): GameState {
       const discounted = hasTech(player, "philosophy");
       player.stars -= techCost(action.techId, citiesOf(state, player.id).length, discounted);
       player.techs.push(action.techId);
+      break;
+    }
+
+    case "BOMBARD": {
+      const tower = tileAt(state, action.x, action.y);
+      const target = mustUnit(state, action.targetId);
+      tower.firedTurn = state.turn;
+      target.hp -= bombardDamage(state, tower, target);
+      if (target.hp <= 0) {
+        state.units = state.units.filter((u) => u.id !== target.id);
+        updateWinState(state);
+      }
+      break;
+    }
+
+    case "FOUND_CITY": {
+      const unit = mustUnit(state, action.unitId);
+      const tile = tileAt(state, unit.x, unit.y);
+      player.stars -= FOUND_CITY_COST;
+      const city = foundCity(state, player, unit.x, unit.y);
+      tile.cityHere = city.id;
+      claimTerritory(state, city);
+      unit.homeCityId = city.id;
+      unit.moved = true;
+      unit.attacked = true;
+      unit.fortified = false;
+      computeVisibility(state, player);
       break;
     }
 
@@ -326,6 +349,51 @@ export function applyAction(prev: GameState, action: Action): GameState {
   return state;
 }
 
+/**
+ * Raise a new city for a player and add it to the state. Shared by the two ways
+ * one comes into being — taking a village, and paying settlers to go and build
+ * one from nothing — so both name it the same way and start it the same way.
+ */
+function foundCity(state: GameState, player: PlayerState, x: number, y: number): City {
+  const tribe = tribeById(player.tribeId);
+  const nameIdx = citiesOf(state, player.id).length % tribe.cityNames.length;
+  const city: City = {
+    id: state.nextId++,
+    x,
+    y,
+    ownerId: player.id,
+    name: tribe.cityNames[nameIdx],
+    level: 1,
+    population: 0,
+    isCapital: false,
+    walls: false,
+    workshop: false,
+    parks: 0,
+    spaceStation: false,
+    borderRadius: 1,
+    pendingReward: null,
+  };
+  state.cities.push(city);
+  return city;
+}
+
+/**
+ * Anti-air fire on an aircraft that has just flown into an enemy umbrella.
+ * Recorded on the state so the interface can show the burst even though it
+ * happens in the middle of somebody else's move.
+ */
+function takeFlakFire(state: GameState, unit: Unit): void {
+  const damage = flakFireAt(state, unit);
+  if (damage === 0) return;
+  unit.hp -= damage;
+  const destroyed = unit.hp <= 0;
+  state.lastFlakHit = { unitId: unit.id, x: unit.x, y: unit.y, damage, destroyed };
+  if (destroyed) {
+    state.units = state.units.filter((u) => u.id !== unit.id);
+    updateWinState(state);
+  }
+}
+
 function mustUnit(state: GameState, id: number): Unit {
   const u = unitById(state, id);
   if (!u) throw new Error(`unit ${id} not found`);
@@ -344,6 +412,8 @@ function maybePromote(unit: Unit): void {
 function canOccupy(state: GameState, unit: Unit, x: number, y: number): boolean {
   const tile = tileAt(state, x, y);
   const terr = TERRAIN[tile.terrain];
+  // an aircraft moves in over the vacated tile the same way it flies anywhere
+  if (isAir(unit.type)) return tile.terrain !== "void";
   if (terr.water) return unit.embarked !== null;
   if (unit.embarked !== null) return false;
   return terrainOpenTo(state, unit.ownerId)(tile.terrain);
@@ -519,6 +589,7 @@ function advanceTurn(state: GameState): void {
         u.moved = false;
         u.attacked = false;
       }
+      applyMedicalCare(state, candidate.id);
       computeVisibility(state, candidate);
       return;
     }

@@ -126,15 +126,20 @@ export default function GameScreen() {
         const unitOffsets = offsetsFor(controller.anims, now);
 
         const selected = controller.selectedUnitId;
-        const key = `${controller.getVersion()}:${selected}:${controller.aiBusy}`;
+        const tileSel = controller.selectedTile;
+        const key = `${controller.getVersion()}:${selected}:${tileSel?.join(",") ?? ""}:${controller.aiBusy}`;
         if (key !== derivedKey) {
           derivedKey = key;
           const moves: Array<[number, number]> = [];
           const attackIds: number[] = [];
-          if (selected !== null && !controller.aiBusy) {
+          if (!controller.aiBusy) {
             for (const a of controller.legal) {
-              if (a.type === "MOVE" && a.unitId === selected) moves.push([a.x, a.y]);
-              if (a.type === "ATTACK" && a.unitId === selected) attackIds.push(a.targetId);
+              if (selected !== null && a.type === "MOVE" && a.unitId === selected) moves.push([a.x, a.y]);
+              if (selected !== null && a.type === "ATTACK" && a.unitId === selected) attackIds.push(a.targetId);
+              // a selected shore battery rings the shipping it can reach
+              if (tileSel && a.type === "BOMBARD" && a.x === tileSel[0] && a.y === tileSel[1]) {
+                attackIds.push(a.targetId);
+              }
             }
           }
           derived = { watched: watchedMask(s, human), moves, attackIds };
