@@ -195,7 +195,7 @@ export function newGame(opts: NewGameOptions): GameState {
   for (let y = 0; y < H; y++) {
     for (let x = 0; x < W; x++) {
       if (mapType === "circle" && !insideCircle(size, x, y)) {
-        tiles.push({ x, y, terrain: "void", resource: null, building: null, cityId: null, village: false, cityHere: null, ruin: false, tilled: false, firedTurn: null });
+        tiles.push({ x, y, terrain: "void", resource: null, building: null, cityId: null, village: false, cityHere: null, ruin: false, tilled: false, firedTurn: null, fireOutTurn: null });
         continue;
       }
       let e = elevation[y * W + x];
@@ -230,7 +230,7 @@ export function newGame(opts: NewGameOptions): GameState {
       else if (e > 0.78) terrain = "mountain";
       else terrain = m > 0.62 ? "forest" : "field";
 
-      tiles.push({ x, y, terrain, resource: null, building: null, cityId: null, village: false, cityHere: null, ruin: false, tilled: false, firedTurn: null });
+      tiles.push({ x, y, terrain, resource: null, building: null, cityId: null, village: false, cityHere: null, ruin: false, tilled: false, firedTurn: null, fireOutTurn: null });
     }
   }
 

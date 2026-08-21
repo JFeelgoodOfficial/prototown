@@ -18,7 +18,7 @@
  */
 import * as THREE from "three";
 import type { GameState, Tile, Unit } from "../../engine/state";
-import { idx, coordsOf, tileCount, cityById, planetCount, planetOf, gridWidth } from "../../engine/state";
+import { idx, coordsOf, tileCount, cityById, isBurning, planetCount, planetOf, gridWidth } from "../../engine/state";
 import { sphereTopology } from "../../engine/topology";
 import {
   diamondPath,
@@ -350,6 +350,9 @@ export class GlobeRenderer {
       if (tile.terrain === "mountain" && tile.building !== "mine") out.push({ kind: "mountain", variant });
       if (tile.terrain === "forest" && tile.building !== "lumber_hut")
         out.push({ kind: "trees", variant, tribeId: ownerTribe });
+      // fire outlives whatever stood here, so it is pushed before the early
+      // return a city takes: a burning city tile still shows its flames
+      if (isBurning(s, tile)) out.push({ kind: "fire", variant });
       if (tile.cityHere !== null) {
         const here = cityById(s, tile.cityHere);
         if (here)

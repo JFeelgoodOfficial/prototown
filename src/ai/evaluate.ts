@@ -1,11 +1,12 @@
 import type { GameState, Unit } from "../engine/state";
-import { unitById, cityById, tileAt, playerById, dist, idx, neighbors, citiesOf, unitsOf, hasTech, planetOf } from "../engine/state";
+import { unitById, cityById, tileAt, unitAt, playerById, dist, idx, neighbors, citiesOf, unitsOf, hasTech, burnsUnit, planetOf } from "../engine/state";
+import { firestormLine } from "../engine/legalActions";
 import type { Action } from "../engine/actions";
 import { bombardDamage, resolveCombat } from "../engine/combat";
 import { UNITS, isAir } from "../data/units";
 import { TECH_BY_ID } from "../data/techs";
 import { TERRAIN } from "../data/terrain";
-import { HARVEST_DEFS } from "../data/constants";
+import { HARVEST_DEFS, FIRESTORM_COST } from "../data/constants";
 import { cityUnitCount, cityCapacity } from "../engine/economy";
 
 export interface AiPersonality {
@@ -244,9 +245,37 @@ export function scoreAction(
       return (40 + damage * 4 + (kills ? 30 + UNITS[target.type].cost * 8 : 0)) * personality.aggression;
     }
 
+    case "FIRESTORM": {
+      const bomber = unitById(state, action.unitId);
+      if (!bomber) return -Infinity;
+      let score = -FIRESTORM_COST * 3; // the munitions are never free
+      for (const [x, y] of firestormLine(state, bomber.x, bomber.y, action.x, action.y)) {
+        const tile = tileAt(state, x, y);
+        const victim = unitAt(state, x, y);
+        if (victim && !isAir(victim.type)) {
+          // no combat roll, no retaliation: a kill in the line is a certainty
+          score += victim.ownerId === playerId
+            ? -(40 + UNITS[victim.type].cost * 8)
+            : 55 + UNITS[victim.type].cost * 8;
+        }
+        if (tile.building !== null) {
+          const owner = tile.cityId !== null ? cityById(state, tile.cityId)?.ownerId : undefined;
+          if (owner === playerId) score -= 60;
+          else if (owner !== undefined) score += 30;
+        }
+        // ground left burning is ground the enemy cannot walk back over
+        const enemyGround = tile.cityId !== null && cityById(state, tile.cityId)?.ownerId !== playerId;
+        if (enemyGround) score += 6;
+      }
+      return score * personality.aggression;
+    }
+
     case "MOVE": {
       const unit = unitById(state, action.unitId);
       if (!unit) return -Infinity;
+      // Fire is not a risk to weigh against the ground it covers: whatever
+      // walks in dies. Nothing on the far side of it is worth that.
+      if (burnsUnit(state, tileAt(state, action.x, action.y), unit)) return -Infinity;
       const best = nearestObjective(state, unit, objectives);
       if (!best) return 0;
       const before = dist(state, unit.x, unit.y, best.x, best.y);
@@ -360,7 +389,15 @@ export function scoreAction(
       // half as much larger as its aggression — scaling it fully starves the
       // economy that pays for the army in the first place.
       const wantArmy = Math.round((cities * 2 + 1) * (1 + (personality.aggression - 1) * 0.5));
-      if (army >= wantArmy) return -5;
+      // The bomb has no other ride. With Atomic Theory in hand and the nuke
+      // still on the table, the first Bomber is worth a slot however full the
+      // roster already is.
+      const needsNukeRide =
+        action.unitType === "bomber" &&
+        !state.nukeLaunched &&
+        hasTech(player, "atomic_theory") &&
+        !unitsOf(state, playerId).some((u) => u.type === "bomber");
+      if (army >= wantArmy && !needsNukeRide) return -5;
       if (cityUnitCount(state, city.id) >= cityCapacity(state, city)) return -Infinity;
       const def = UNITS[action.unitType];
       // A medic is a support piece, not a soldier: worth a slot only while
@@ -387,7 +424,8 @@ export function scoreAction(
         const hardened =
           state.units.filter((u) => u.ownerId !== playerId && u.fortified).length +
           state.cities.filter((c) => c.ownerId !== playerId && c.walls).length;
-        return (24 + def.cost * 3 + hardened * 12) * personality.aggression;
+        const carrier = needsNukeRide ? 200 : 0;
+        return carrier + (24 + def.cost * 3 + hardened * 12) * personality.aggression;
       }
       return (20 + def.cost * 3 + (army < cities ? 15 : 0)) * personality.aggression;
     }
@@ -398,8 +436,12 @@ export function scoreAction(
       let score = 30 - tech.tier * 6;
       if (["organization", "hunting", "fishing", "farming", "forestry", "mining"].includes(tech.id)) score += 12;
       if (["archery", "shields", "smithery", "chivalry", "rocketry"].includes(tech.id)) score += 8 * personality.aggression;
-      // the one nuke is only worth researching toward while it is still on the table
-      if (tech.id === "atomic_theory") score += state.nukeLaunched ? -10 : 8 * personality.aggression;
+      // The one nuke is only worth researching toward while it is still on the
+      // table — and only a Bomber can carry it, so the bomb without Flight is a
+      // warhead with nowhere to sit.
+      if (tech.id === "atomic_theory") {
+        score += state.nukeLaunched ? -10 : hasTech(player, "flight") ? 8 * personality.aggression : -6;
+      }
       // techs that pay for themselves: income, cheaper research, star windfalls
       if (["trade", "philosophy", "whaling"].includes(tech.id)) score += 12 * personality.economy;
       // roads is worth more the more ground there is to cover
@@ -407,6 +449,10 @@ export function scoreAction(
       if (["strategy", "construction"].includes(tech.id)) score += 8 * personality.aggression;
       // aircraft and anti-air only start paying once there is a real war on
       if (["flight", "air_defence"].includes(tech.id)) score += 6 * personality.aggression;
+      // incendiaries are worth having exactly as far as there is a war on
+      if (tech.id === "incendiaries") score += 10 * personality.aggression;
+      // holding the bomb with no way to fly it is the one time Flight is urgent
+      if (tech.id === "flight" && hasTech(player, "atomic_theory") && !state.nukeLaunched) score += 40;
       // shore guns matter exactly as much as there is enemy shipping about
       if (tech.id === "coastal_defence") {
         score += state.units.some((u) => u.ownerId !== playerId && u.embarked !== null) ? 14 : -6;
@@ -454,6 +500,10 @@ export function scoreAction(
       for (const u of unitsOf(state, playerId)) {
         if (dist(state, u.x, u.y, city.x, city.y) <= 1) score -= 45;
       }
+      // Which plane carries it is a real choice: one that drops from inside the
+      // ring goes up with the city, where a stand-off run brings its crew home.
+      const carrier = unitById(state, action.unitId);
+      if (carrier && dist(state, carrier.x, carrier.y, city.x, city.y) <= 1) score -= 60;
       for (const c of citiesOf(state, playerId)) {
         if (dist(state, c.x, c.y, city.x, city.y) <= 1) score -= 800;
       }

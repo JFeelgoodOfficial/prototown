@@ -7,7 +7,7 @@ export function makeTestState(size = 8): GameState {
   const tiles: Tile[] = [];
   for (let y = 0; y < size; y++)
     for (let x = 0; x < size; x++)
-      tiles.push({ x, y, terrain: "field", resource: null, building: null, cityId: null, village: false, cityHere: null, ruin: false, tilled: false, firedTurn: null });
+      tiles.push({ x, y, terrain: "field", resource: null, building: null, cityId: null, village: false, cityHere: null, ruin: false, tilled: false, firedTurn: null, fireOutTurn: null });
 
   const state: GameState = {
     seed: 1,

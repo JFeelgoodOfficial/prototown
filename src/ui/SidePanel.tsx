@@ -1,6 +1,17 @@
 import { useState } from "react";
 import { useGame } from "./store";
-import { unitById, tileAt, cityById, unitAt, type GameState, type Tile } from "../engine/state";
+import {
+  unitById,
+  tileAt,
+  cityById,
+  unitAt,
+  dist,
+  isBurning,
+  type GameState,
+  type Tile,
+  type City,
+  type Unit,
+} from "../engine/state";
 import { UNITS, NAVAL, ORBIT, type UnitType } from "../data/units";
 import {
   HARVEST_DEFS,
@@ -8,6 +19,10 @@ import {
   BUILDING_DEFS,
   FOUND_CITY_COST,
   NAVAL_TOWER_RANGE,
+  NUKE_DELIVERY_RANGE,
+  FIRESTORM_COST,
+  FIRESTORM_LENGTH,
+  FIRESTORM_BURN_TURNS,
 } from "../data/constants";
 import { cityIncome, popForNextLevel, cityUnitCount, cityCapacity } from "../engine/economy";
 import UnitPortrait from "./UnitPortrait";
@@ -27,8 +42,20 @@ export default function SidePanel() {
     // actions themselves (one per landing site) never render as buttons.
     const acts = game.legal.filter(
       (a) =>
-        "unitId" in a && a.unitId === unit.id && a.type !== "MOVE" && a.type !== "ATTACK" && a.type !== "LAND",
+        "unitId" in a &&
+        a.unitId === unit.id &&
+        a.type !== "MOVE" &&
+        a.type !== "ATTACK" &&
+        a.type !== "LAND" &&
+        a.type !== "LAUNCH_NUKE" &&
+        a.type !== "FIRESTORM",
     );
+    // The eight firestorm headings get a compass of their own below, rather
+    // than eight identical buttons in with the rest.
+    const runs = game.legal.filter((a) => a.type === "FIRESTORM" && a.unitId === unit.id);
+    // A nuke run is aimed at a city, not fired from this panel: it is offered
+    // (behind its own confirmation) when that city is the thing selected.
+    const canNuke = game.legal.some((a) => a.type === "LAUNCH_NUKE" && a.unitId === unit.id);
     const mode =
       unit.embarked === null ? null : unit.embarked === "orbit" ? ORBIT : NAVAL[unit.embarked];
     return (
@@ -59,6 +86,11 @@ export default function SidePanel() {
                 Flies over anything — but holds no ground, and enemy flak fires on it.
               </div>
             )}
+            {canNuke && (
+              <div className="text-xs text-amber-300">
+                ☢ Armed — tap an enemy city in sight, within {NUKE_DELIVERY_RANGE} tiles, to send it.
+              </div>
+            )}
           </div>
         </div>
         <div className="mt-2 flex flex-wrap gap-2">
@@ -66,6 +98,7 @@ export default function SidePanel() {
             <ActionButton key={JSON.stringify(a)} action={a} />
           ))}
         </div>
+        {runs.length > 0 && <FirestormCompass unit={unit} runs={runs} />}
       </Panel>
     );
   }
@@ -95,7 +128,9 @@ export default function SidePanel() {
             <div className="flex flex-wrap gap-2">
               {trains.length === 0 && (
                 <span className="text-xs text-white/50">
-                  {occupied
+                  {isBurning(s, tile)
+                    ? "The city tile is on fire — nobody musters until it burns out."
+                    : occupied
                     ? "City tile is occupied — move the unit first."
                     : cityUnitCount(s, city.id) >= cityCapacity(s, city)
                       ? "At unit capacity — level up the city."
@@ -122,19 +157,45 @@ export default function SidePanel() {
     }
 
     if (city && city.ownerId !== game.localSeat) {
-      const nuke = game.legal.find((a) => a.type === "LAUNCH_NUKE" && a.cityId === city.id);
-      if (nuke) {
+      // The bomb only ever rides a Bomber, so the panel offers the run from the
+      // best-placed one that can still make it — and says so when none can.
+      const runs = game.legal.filter((a) => a.type === "LAUNCH_NUKE" && a.cityId === city.id);
+      const armed =
+        !s.nukeLaunched &&
+        s.currentPlayerId === game.localSeat &&
+        s.players[game.localSeat].techs.includes("atomic_theory");
+      if (armed) {
+        const best = runs.slice().sort((a, b) => runCost(s, a, city) - runCost(s, b, city))[0];
         return (
           <Panel title={`${city.name}${city.isCapital ? " (capital)" : ""} — level ${city.level}`}>
             <div className="text-xs text-white/60">
-              Enemy city. The nuke levels it and the eight tiles around it — forever. Only one will ever fly.
+              Enemy city. The nuke levels it and the eight tiles around it — forever. Only one will ever
+              fly, and only a Bomber can carry it.
             </div>
-            <div className="mt-2">
-              <NukeButton action={nuke} cityName={city.name} />
-            </div>
+            {best ? (
+              <div className="mt-2">
+                <NukeButton action={best} cityName={city.name} />
+              </div>
+            ) : (
+              <div className="mt-2 text-xs text-amber-300">
+                Needs a Bomber with its strike unspent, within {NUKE_DELIVERY_RANGE} tiles of a city
+                you can see right now.
+              </div>
+            )}
           </Panel>
         );
       }
+    }
+
+    if (isBurning(s, tile)) {
+      return (
+        <Panel title="Burning ground">
+          <div className="mt-1 text-xs text-amber-300">
+            A firestorm is still raging here. Anything on foot that walks in dies in it; only aircraft
+            pass over. It burns out on turn {tile.fireOutTurn}.
+          </div>
+        </Panel>
+      );
     }
 
     if (tile.ruin) {
@@ -200,6 +261,75 @@ function ActionButton({ action }: { action: Action }) {
   );
 }
 
+/** The eight headings, laid out as they sit around the plane on the compass. */
+const HEADINGS: Array<[number, number, string]> = [
+  [-1, -1, "↖"], [0, -1, "↑"], [1, -1, "↗"],
+  [-1, 0, "←"], [0, 0, "✈"], [1, 0, "→"],
+  [-1, 1, "↙"], [0, 1, "↓"], [1, 1, "↘"],
+];
+
+/**
+ * Picking the heading for a firestorm run. Eight identical buttons in the row
+ * of actions would say nothing; a compass around the plane says all of it.
+ */
+function FirestormCompass({ unit, runs }: { unit: Unit; runs: Action[] }) {
+  const game = useGame();
+  const byHeading = new Map(
+    runs.map((r) => [r.type === "FIRESTORM" ? `${r.x - unit.x},${r.y - unit.y}` : "", r]),
+  );
+  return (
+    <div className="mt-3 flex items-start gap-3">
+      <div className="grid w-[96px] shrink-0 grid-cols-3 gap-1">
+        {HEADINGS.map(([dx, dy, glyph]) => {
+          const run = byHeading.get(`${dx},${dy}`);
+          if (!run) {
+            return (
+              <div
+                key={`${dx},${dy}`}
+                className="flex h-7 items-center justify-center rounded bg-white/5 text-sm text-white/25"
+              >
+                {dx === 0 && dy === 0 ? glyph : ""}
+              </div>
+            );
+          }
+          return (
+            <button
+              key={`${dx},${dy}`}
+              className="h-7 rounded bg-orange-700 text-sm font-bold hover:bg-orange-500"
+              onClick={() => game.dispatch(run)}
+            >
+              {glyph}
+            </button>
+          );
+        })}
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="text-xs font-semibold uppercase text-white/50">
+          🔥 Firestorm (⭐{FIRESTORM_COST})
+        </div>
+        <div className="mt-1 text-xs text-white/60">
+          Burns {FIRESTORM_LENGTH} tiles out along that heading. Everything standing in the fire dies —
+          yours as readily as theirs — buildings burn down to bare field, and the ground keeps burning
+          for {FIRESTORM_BURN_TURNS} turns.
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * How much a nuke run costs the player who flies it, for picking between the
+ * bombers that could make it. Anything inside the ring dies with the city, so a
+ * plane that can stand off is always the better one to send; nearer is better
+ * only among the ones that come home.
+ */
+function runCost(s: GameState, a: Action, city: City): number {
+  const bomber = a.type === "LAUNCH_NUKE" ? unitById(s, a.unitId) : undefined;
+  if (!bomber) return Infinity;
+  const away = dist(s, bomber.x, bomber.y, city.x, city.y);
+  return away <= 1 ? 100 : away;
+}
+
 /** Launching the one nuke is irreversible, so the button asks twice. */
 function NukeButton({ action, cityName }: { action: Action; cityName: string }) {
   const game = useGame();
@@ -263,6 +393,8 @@ function labelFor(a: Action, s: GameState): string {
       return `${UNITS[a.unitType as UnitType].name} (⭐${UNITS[a.unitType as UnitType].cost})`;
     case "LAUNCH_NUKE":
       return "☢ Launch Nuke";
+    case "FIRESTORM":
+      return `🔥 Firestorm (⭐${FIRESTORM_COST})`;
     case "LAUNCH":
       return "🚀 Launch to orbit";
     default:

@@ -1,4 +1,5 @@
 import type { UnitType } from "../data/units";
+import { UNITS } from "../data/units";
 import { sphereTopology } from "./topology";
 
 export type TerrainType = "field" | "forest" | "mountain" | "water" | "ocean" | "crater" | "void";
@@ -32,6 +33,11 @@ export interface Tile {
   tilled: boolean;
   /** turn a tower on this tile last fired, so each one fires once a turn */
   firedTurn: number | null;
+  /**
+   * Firestorm: the turn the flames on this tile die down. Null on ground that
+   * is not burning. Anything that walks in while it burns does not walk out.
+   */
+  fireOutTurn: number | null;
 }
 
 export interface City {
@@ -205,6 +211,24 @@ export function tileAt(state: GameState, x: number, y: number): Tile {
 /** In bounds and not an off-map void tile. */
 export function isPlayable(state: Pick<GameState, "size" | "mapType" | "tiles">, x: number, y: number): boolean {
   return inBounds(state, x, y) && state.tiles[idx(state, x, y)].terrain !== "void";
+}
+
+/**
+ * Whether a firestorm is still burning on this tile. The flames are set to go
+ * out on a stated turn, so the check is against the clock rather than a
+ * countdown ticking on every tile of the map.
+ */
+export function isBurning(state: Pick<GameState, "turn">, tile: Tile): boolean {
+  return tile.fireOutTurn !== null && state.turn < tile.fireOutTurn;
+}
+
+/**
+ * Whether fire on this tile would kill the unit. Aircraft are over the flames
+ * rather than in them, and a unit in orbit is over the whole world — its tile
+ * is only the pad it left from.
+ */
+export function burnsUnit(state: Pick<GameState, "turn">, tile: Tile, unit: Unit): boolean {
+  return isBurning(state, tile) && !UNITS[unit.type].air && unit.embarked !== "orbit";
 }
 
 export function unitAt(state: GameState, x: number, y: number): Unit | undefined {

@@ -30,7 +30,7 @@ describe("atomic theory research gating", () => {
 });
 
 describe("nuke legality", () => {
-  it("requires atomic theory, live sight of an enemy city, and an unfired nuke", () => {
+  it("requires atomic theory, a bomber, live sight of an enemy city, and an unfired nuke", () => {
     const s = makeTestState(); // capitals at (1,1) for p0 and (6,6) for p1
     expect(nukesIn(computeLegalActions(s, 0))).toHaveLength(0);
 
@@ -38,24 +38,73 @@ describe("nuke legality", () => {
     // enemy capital is out of live sight: still nothing
     expect(nukesIn(computeLegalActions(s, 0))).toHaveLength(0);
 
-    // a scout standing next to the enemy capital brings it into sight
+    // a scout standing next to the enemy capital brings it into sight — but
+    // sight alone drops no bomb, there is nothing to fly it
     addUnit(s, 0, "warrior", 5, 5);
+    expect(nukesIn(computeLegalActions(s, 0))).toHaveLength(0);
+
+    const bomber = addUnit(s, 0, "bomber", 4, 4); // 2 tiles off the target
     const nukes = nukesIn(computeLegalActions(s, 0));
     expect(nukes).toHaveLength(1);
-    expect((nukes[0] as { cityId: number }).cityId).toBe(s.cities[1].id);
+    expect(nukes[0]).toMatchObject({ unitId: bomber.id, cityId: s.cities[1].id });
 
     // never your own city, and never a second nuke for anyone
     s.nukeLaunched = true;
     expect(nukesIn(computeLegalActions(s, 0))).toHaveLength(0);
   });
+
+  it("offers the run only from a bomber that is close enough and still has its strike", () => {
+    const s = makeTestState();
+    s.players[0].techs.push("atomic_theory");
+    addUnit(s, 0, "warrior", 5, 5); // keeps the enemy capital watched throughout
+
+    // out at 4 tiles the bomb cannot be flown; one tile closer it can
+    const far = addUnit(s, 0, "bomber", 2, 2);
+    expect(nukesIn(computeLegalActions(s, 0))).toHaveLength(0);
+    far.x = 3;
+    far.y = 3;
+    expect(nukesIn(computeLegalActions(s, 0))).toHaveLength(1);
+
+    // a plane that has already struck this turn is done flying
+    far.attacked = true;
+    expect(nukesIn(computeLegalActions(s, 0))).toHaveLength(0);
+    far.attacked = false;
+
+    // having merely moved is no bar: flying in and dropping is one sortie
+    far.moved = true;
+    expect(nukesIn(computeLegalActions(s, 0))).toHaveLength(1);
+
+    // and no other unit type will do, however close it stands
+    far.type = "missile";
+    expect(nukesIn(computeLegalActions(s, 0))).toHaveLength(0);
+  });
+
+  it("lists one run per bomber that can reach the city", () => {
+    const s = makeTestState();
+    s.players[0].techs.push("atomic_theory");
+    addUnit(s, 0, "warrior", 5, 5);
+    const a = addUnit(s, 0, "bomber", 4, 4);
+    const b = addUnit(s, 0, "bomber", 3, 5);
+    const runs = nukesIn(computeLegalActions(s, 0)) as Array<{ unitId: number }>;
+    expect(runs.map((r) => r.unitId).sort()).toEqual([a.id, b.id].sort());
+  });
 });
 
 describe("nuke detonation", () => {
+  /** Player 0 with the bomb and a bomber standing off two tiles to fly it. */
   function armedState() {
     const s = makeTestState();
     s.players[0].techs.push("atomic_theory");
     addUnit(s, 0, "warrior", 5, 5); // spotter, inside the blast
+    addUnit(s, 0, "bomber", 4, 4); // carrier, outside it
     return s;
+  }
+
+  /** The one legal nuke run against this city, as the engine offers it. */
+  function runAt(s: ReturnType<typeof makeTestState>, cityId: number): Action {
+    const run = computeLegalActions(s, 0).find((a) => a.type === "LAUNCH_NUKE" && a.cityId === cityId);
+    expect(run).toBeDefined();
+    return run!;
   }
 
   it("craters the city and its 8 neighbours, killing units of every owner", () => {
@@ -68,7 +117,7 @@ describe("nuke detonation", () => {
     addUnit(s, 1, "warrior", 6, 5); // defender inside the blast
     const survivor = addUnit(s, 0, "warrior", 3, 3); // outside
 
-    const next = applyAction(s, { type: "LAUNCH_NUKE", cityId: target.id });
+    const next = applyAction(s, runAt(s, target.id));
 
     expect(next.nukeLaunched).toBe(true);
     for (let y = 5; y <= 7; y++)
@@ -91,7 +140,7 @@ describe("nuke detonation", () => {
   it("eliminates a player whose last city is nuked and ends the game", () => {
     const s = armedState();
     addUnit(s, 1, "warrior", 0, 6); // far from the blast, dies with its tribe
-    const next = applyAction(s, { type: "LAUNCH_NUKE", cityId: s.cities[1].id });
+    const next = applyAction(s, runAt(s, s.cities[1].id));
     expect(next.players[1].alive).toBe(false);
     expect(next.units.filter((u) => u.ownerId === 1)).toHaveLength(0);
     expect(next.winnerId).toBe(0);
@@ -107,13 +156,31 @@ describe("nuke detonation", () => {
     const orphan = addUnit(s, 1, "warrior", 1, 4);
     orphan.homeCityId = target.id;
 
-    const next = applyAction(s, { type: "LAUNCH_NUKE", cityId: target.id });
+    const next = applyAction(s, runAt(s, target.id));
 
     expect(cityById(next, adjacent.id)).toBeUndefined();
     expect(cityById(next, refuge.id)).toBeDefined();
     expect(next.players[1].alive).toBe(true);
     expect(tileAt(next, 4, 4).cityId).toBeNull();
     expect(next.units.find((u) => u.id === orphan.id)?.homeCityId).toBeNull();
+  });
+
+  it("spends the carrier's turn and brings it home from a stand-off tile", () => {
+    const s = armedState();
+    const bomber = s.units.find((u) => u.type === "bomber")!;
+    const next = applyAction(s, runAt(s, s.cities[1].id));
+
+    const after = next.units.find((u) => u.id === bomber.id);
+    expect(after).toBeDefined();
+    expect(after).toMatchObject({ x: 4, y: 4, moved: true, attacked: true });
+  });
+
+  it("loses the carrier when it drops from directly overhead", () => {
+    const s = makeTestState();
+    s.players[0].techs.push("atomic_theory");
+    const bomber = addUnit(s, 0, "bomber", 6, 5); // inside the ring it is about to make
+    const next = applyAction(s, runAt(s, s.cities[1].id));
+    expect(next.units.find((u) => u.id === bomber.id)).toBeUndefined();
   });
 });
 

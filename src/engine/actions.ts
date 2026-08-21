@@ -19,7 +19,9 @@ export type Action =
   | { type: "RESEARCH"; techId: string }
   | { type: "BOMBARD"; x: number; y: number; targetId: number }
   | { type: "FOUND_CITY"; unitId: number }
-  | { type: "LAUNCH_NUKE"; cityId: number }
+  | { type: "LAUNCH_NUKE"; unitId: number; cityId: number }
+  /** Bomber incendiary run: (x, y) is the first tile of the line it burns. */
+  | { type: "FIRESTORM"; unitId: number; x: number; y: number }
   | { type: "CHOOSE_REWARD"; cityId: number; reward: string }
   | { type: "END_TURN" };
 

@@ -1,5 +1,5 @@
 import type { GameState, Tile, Unit } from "../engine/state";
-import { idx, cityById, inBounds } from "../engine/state";
+import { idx, cityById, inBounds, isBurning } from "../engine/state";
 import { isAir } from "../data/units";
 import { tribeById } from "../data/tribes";
 import { TILE_W, TILE_H, gridToWorld, worldToGrid, drawOrder } from "./iso";
@@ -515,6 +515,8 @@ function drawTileAt(
   }
   if (tile.village) blit(ctx, propSpriteFor({ kind: "village" }), wx, wy);
   if (tile.ruin) blit(ctx, propSpriteFor({ kind: "ruin" }), wx, wy);
+  // fire is drawn over whatever it is consuming, and under the city walls
+  if (isBurning(state, tile)) blit(ctx, propSpriteFor({ kind: "fire", variant }), wx, wy);
   if (tile.cityHere !== null) {
     const here = cityById(state, tile.cityHere);
     if (here) {
