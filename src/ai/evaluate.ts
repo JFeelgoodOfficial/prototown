@@ -1,8 +1,8 @@
 import type { GameState, Unit } from "../engine/state";
 import { unitById, cityById, tileAt, playerById, dist, idx, neighbors, citiesOf, unitsOf, hasTech, planetOf } from "../engine/state";
 import type { Action } from "../engine/actions";
-import { resolveCombat } from "../engine/combat";
-import { UNITS } from "../data/units";
+import { bombardDamage, resolveCombat } from "../engine/combat";
+import { UNITS, isAir } from "../data/units";
 import { TECH_BY_ID } from "../data/techs";
 import { TERRAIN } from "../data/terrain";
 import { HARVEST_DEFS } from "../data/constants";
@@ -29,6 +29,9 @@ export interface AiPersonality {
    */
   replies: number;
 }
+
+/** Unexplored tiles below which a scout plane is not worth a city's unit slot. */
+const UNSEEN_WORTH_SCOUTING = 20;
 
 export const BALANCED: AiPersonality = {
   aggression: 1,
@@ -226,6 +229,21 @@ export function scoreAction(
     case "CAPTURE":
       return 1000 * personality.expansion;
 
+    case "FOUND_CITY":
+      // A whole extra city, so this ranks with taking one — just below an
+      // actual capture, which is free and may not still be there next turn.
+      return 700 * personality.expansion;
+
+    case "BOMBARD": {
+      const tower = tileAt(state, action.x, action.y);
+      const target = unitById(state, action.targetId);
+      if (!target) return -Infinity;
+      // The guns cost nothing to fire and take no return fire: always worth it.
+      const damage = bombardDamage(state, tower, target);
+      const kills = target.hp - damage <= 0;
+      return (40 + damage * 4 + (kills ? 30 + UNITS[target.type].cost * 8 : 0)) * personality.aggression;
+    }
+
     case "MOVE": {
       const unit = unitById(state, action.unitId);
       if (!unit) return -Infinity;
@@ -234,10 +252,12 @@ export function scoreAction(
       const before = dist(state, unit.x, unit.y, best.x, best.y);
       const after = dist(state, action.x, action.y, best.x, best.y);
       let score = (before - after) * 8 * best.weight * personality.expansion;
-      // landing on a village/city tile sets up next-turn capture
+      // landing on a village/city tile sets up next-turn capture — but an
+      // aircraft parked on one is just squatting: it can never take the place
+      const holds = !isAir(unit.type);
       const destTile = tileAt(state, action.x, action.y);
-      if (destTile.village) score += 60 * personality.expansion;
-      if (destTile.cityHere !== null) {
+      if (destTile.village && holds) score += 60 * personality.expansion;
+      if (destTile.cityHere !== null && holds) {
         const c = cityById(state, destTile.cityHere);
         if (c && c.ownerId !== playerId) score += 60 * personality.expansion;
       }
@@ -312,6 +332,22 @@ export function scoreAction(
         );
         if (!hasPad) return 90 * personality.economy;
       }
+      // Fortifications feed nobody: they are worth building where there is
+      // something to shoot at, and a waste of a tile otherwise.
+      if (action.building === "naval_tower") {
+        const shipping = state.units.some((u) => u.ownerId !== playerId && u.embarked !== null);
+        return shipping ? 70 * personality.aggression : 10;
+      }
+      if (action.building === "flak_tower") {
+        const aircraft = state.units.some((u) => u.ownerId !== playerId && isAir(u.type));
+        return aircraft ? 70 * personality.aggression : 10;
+      }
+      if (action.building === "airfield") {
+        const hasField = state.tiles.some(
+          (t) => t.building === "airfield" && t.cityId !== null && cityById(state, t.cityId)?.ownerId === playerId,
+        );
+        return hasField ? 20 : 65 * personality.aggression;
+      }
       return 50 * personality.economy;
     }
 
@@ -327,6 +363,32 @@ export function scoreAction(
       if (army >= wantArmy) return -5;
       if (cityUnitCount(state, city.id) >= cityCapacity(state, city)) return -Infinity;
       const def = UNITS[action.unitType];
+      // A medic is a support piece, not a soldier: worth a slot only while
+      // there are wounded for it to look after.
+      if (action.unitType === "medic") {
+        const wounded = unitsOf(state, playerId).filter((u) => u.hp < u.maxHp * 0.7).length;
+        const medics = unitsOf(state, playerId).filter((u) => u.type === "medic").length;
+        return wounded > medics * 2 ? 30 + wounded * 8 : -10;
+      }
+      // One pair of eyes is plenty, and only while there is still map to find.
+      // Off-map void has to be excluded or a circle map would look permanently
+      // unexplored and every tribe would keep buying scouts forever.
+      if (action.unitType === "scout_plane") {
+        const scouts = unitsOf(state, playerId).filter((u) => u.type === "scout_plane").length;
+        let unseen = 0;
+        for (const t of state.tiles) {
+          if (t.terrain !== "void" && player.explored[idx(state, t.x, t.y)] === 0) unseen++;
+        }
+        return scouts === 0 && unseen > UNSEEN_WORTH_SCOUTING ? 50 : -10;
+      }
+      // A bomber is worth its slot over a launcher exactly where the cover it
+      // ignores is what makes a target expensive to take the ordinary way.
+      if (action.unitType === "bomber") {
+        const hardened =
+          state.units.filter((u) => u.ownerId !== playerId && u.fortified).length +
+          state.cities.filter((c) => c.ownerId !== playerId && c.walls).length;
+        return (24 + def.cost * 3 + hardened * 12) * personality.aggression;
+      }
       return (20 + def.cost * 3 + (army < cities ? 15 : 0)) * personality.aggression;
     }
 
@@ -343,6 +405,13 @@ export function scoreAction(
       // roads is worth more the more ground there is to cover
       if (tech.id === "roads") score += 6 + citiesOf(state, playerId).length * 2;
       if (["strategy", "construction"].includes(tech.id)) score += 8 * personality.aggression;
+      // aircraft and anti-air only start paying once there is a real war on
+      if (["flight", "air_defence"].includes(tech.id)) score += 6 * personality.aggression;
+      // shore guns matter exactly as much as there is enemy shipping about
+      if (tech.id === "coastal_defence") {
+        score += state.units.some((u) => u.ownerId !== playerId && u.embarked !== null) ? 14 : -6;
+      }
+      if (tech.id === "medicine") score += 6;
       if (tech.id === "spiritualism") score += state.winMode === "perfection" ? 20 : 4;
       // marooned with nothing left to walk to: the sea techs jump the queue
       if (["fishing", "sailing", "navigation"].includes(tech.id) && wantsSeafaring(state, playerId)) {

@@ -17,6 +17,8 @@ export type Action =
   | { type: "TRAIN"; cityId: number; unitType: UnitType }
   | { type: "BUILD_IMPROVEMENT"; cityId: number; improvement: CityImprovement }
   | { type: "RESEARCH"; techId: string }
+  | { type: "BOMBARD"; x: number; y: number; targetId: number }
+  | { type: "FOUND_CITY"; unitId: number }
   | { type: "LAUNCH_NUKE"; cityId: number }
   | { type: "CHOOSE_REWARD"; cityId: number; reward: string }
   | { type: "END_TURN" };

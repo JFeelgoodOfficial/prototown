@@ -1,6 +1,6 @@
 import type { GameState } from "./state";
 
-export const SAVE_VERSION = 7;
+export const SAVE_VERSION = 8;
 
 export interface SaveFile {
   version: number;
@@ -36,8 +36,13 @@ function normalize(state: GameState): GameState {
   if (state.mapType === undefined) state.mapType = "square";
   if (state.lastRuinReward === undefined) state.lastRuinReward = null;
   if (state.nukeLaunched === undefined) state.nukeLaunched = false;
+  if (state.lastFlakHit === undefined) state.lastFlakHit = null;
   for (const tile of state.tiles) {
     if (tile.ruin === undefined) tile.ruin = false;
+    // Fields cleared before tilled ground was tracked stay unfarmable: the
+    // alternative is retroactively marking every empty field as worked.
+    if (tile.tilled === undefined) tile.tilled = false;
+    if (tile.firedTurn === undefined) tile.firedTurn = null;
   }
   for (const city of state.cities) {
     if (city.spaceStation === undefined) city.spaceStation = false;

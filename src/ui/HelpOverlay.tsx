@@ -49,9 +49,12 @@ export default function HelpOverlay({ onClose }: { onClose: () => void }) {
               "Harvest fruit, animals, and fish (needs the matching tech) to grow city population.",
               "Whales are the exception: with Whaling they pay stars rather than population.",
               "Farms, mines, lumber huts, and ports grow population faster.",
+              "Mine any mountain in your borders — a seam of metal simply makes the mine worth twice as much.",
+              "Pick the fruit off a field and the cleared ground can be ploughed: farm it, crop or no crop.",
               "Ports are the only way to put to sea — move a land unit onto a port and it boards a raft (a ship, once you know Sailing).",
               "When population fills the bar, the city levels up and you pick a reward.",
               "Construction and Spiritualism let you simply buy City Walls and Grand Parks instead of waiting to be offered them.",
+              "With 100 stars in hand, a unit standing on unclaimed land can found a brand-new town there.",
             ]}
           />
           <List
@@ -63,6 +66,25 @@ export default function HelpOverlay({ onClose }: { onClose: () => void }) {
               "Units that survive 3 kills become veterans with extra health.",
               "With Roads, units move twice as far inside your own borders — and woods and peaks there no longer halt them.",
               "Strategy lets every city support one more unit.",
+              "Coastal Defence builds Naval Towers on your coastal water: select one and tap an enemy ship within four tiles to shell it, once a turn. They watch that stretch of sea too.",
+            ]}
+          />
+          <List
+            title="Medicine"
+            items={[
+              "Medicine builds Hospitals on a clear field in your borders.",
+              "Every one of your soldiers within two tiles of a hospital heals at the start of your turn — free, without spending their move.",
+              "Hospitals also let their city train Medics: unarmed, but everyone standing beside one heals each turn as well.",
+            ]}
+          />
+          <List
+            title="The air war"
+            items={[
+              "Flight builds Airfields, and a city with one can train aircraft.",
+              "Scout Planes are unarmed and see three tiles — they cross mountains, forests and open ocean as if none of it were there.",
+              "Bombers strike from above: walls, woods and dug-in positions count for nothing against them.",
+              "Aircraft hold no ground — they cannot capture a village or a city, and cannot claim ruins.",
+              "Air Defence builds Flak Towers. Any enemy aircraft that flies within three tiles of one is fired on as it arrives.",
             ]}
           />
           <List

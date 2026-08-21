@@ -422,6 +422,32 @@ export class GameController {
         this.addFloat(city.x, city.y, `☢ ${city.name} destroyed`, "#ffd75e", performance.now() + NUKE_ANIM_MS * 0.35);
       }
       playSound("nuke");
+    } else if (action.type === "BOMBARD") {
+      const target = unitById(this.state, action.targetId);
+      const next = applyAction(this.state, action);
+      const after = unitById(next, action.targetId);
+      // the shell arcs out to the ship, and the damage lands when it does
+      this.missiles.push({
+        fromX: action.x,
+        fromY: action.y,
+        toX: target?.x ?? action.x,
+        toY: target?.y ?? action.y,
+        bornAt: performance.now(),
+        duration: MISSILE_ANIM_MS,
+      });
+      if (target) {
+        const impactAt = performance.now() + MISSILE_ANIM_MS;
+        const dmg = target.hp - (after?.hp ?? 0);
+        this.addFloat(target.x, target.y, after ? `-${dmg}` : "☠", "#ff6655", impactAt);
+        if (after) this.addHit(target.id, target.x, target.y, impactAt);
+      }
+      playSound("missile");
+      this.state = next;
+    } else if (action.type === "FOUND_CITY") {
+      const unit = unitById(this.state, action.unitId);
+      this.state = applyAction(this.state, action);
+      if (unit) this.addFloat(unit.x, unit.y, "🏙 Town founded", "#ffd75e");
+      playSound("capture");
     } else if (action.type === "RECOVER") {
       const unit = unitById(this.state, action.unitId);
       const next = applyAction(this.state, action);
@@ -437,6 +463,13 @@ export class GameController {
       if (ruin) {
         this.addFloat(ruin.x, ruin.y, ruin.label, ruin.playerId === this.localSeat ? "#ffd75e" : "#c8b79b");
         playSound(ruin.playerId === this.localSeat ? "levelUp" : "capture");
+      }
+      // flak that opened up on the aircraft as it flew in
+      const flak = this.state.lastFlakHit;
+      if (flak) {
+        this.addFloat(flak.x, flak.y, flak.destroyed ? "☠ Shot down" : `-${flak.damage}`, "#ff8844");
+        if (!flak.destroyed) this.addHit(flak.unitId, flak.x, flak.y);
+        playSound(flak.destroyed ? "kill" : "attack");
       }
     } else if (action.type === "LAUNCH") {
       this.state = applyAction(this.state, action);
@@ -581,9 +614,14 @@ export class GameController {
         return t ? seen(t.x, t.y) : false;
       }
       case "CAPTURE":
+      case "FOUND_CITY":
       case "RECOVER": {
         const u = unitById(this.state, action.unitId);
         return u ? seen(u.x, u.y) : false;
+      }
+      case "BOMBARD": {
+        const t = unitById(this.state, action.targetId);
+        return seen(action.x, action.y) || (t ? seen(t.x, t.y) : false);
       }
       case "LAUNCH_NUKE": {
         const c = cityById(this.state, action.cityId);

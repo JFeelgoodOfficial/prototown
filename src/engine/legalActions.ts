@@ -14,7 +14,7 @@ import {
 import type { Action } from "./actions";
 import { reachableTiles, terrainOpenTo } from "./movement";
 import { TERRAIN } from "../data/terrain";
-import { unitRange } from "./combat";
+import { unitAtk, unitRange } from "./combat";
 import { watchedMask } from "./fog";
 import {
   HARVEST_DEFS,
@@ -22,9 +22,12 @@ import {
   CITY_IMPROVEMENTS,
   MAX_PARKS_PER_CITY,
   REWARD_STARS_AMOUNT,
+  FOUND_CITY_COST,
+  NAVAL_TOWER_RANGE,
+  buildingFits,
   type CityImprovement,
 } from "../data/constants";
-import { UNITS, NAVAL, type UnitType } from "../data/units";
+import { UNITS, NAVAL, isAir, type UnitType } from "../data/units";
 import { TECHS, techCost, techAvailable } from "../data/techs";
 import { cityUnitCount, cityCapacity, playerHasPendingReward } from "./economy";
 
@@ -56,7 +59,8 @@ export function computeLegalActions(state: GameState, playerId: number): Action[
         actions.push({ type: "MOVE", unitId: unit.id, x, y });
       }
     }
-    if (!unit.attacked && unit.embarked !== "orbit") {
+    // Medics and scouts carry no weapon at all, so they are never offered a swing.
+    if (!unit.attacked && unit.embarked !== "orbit" && unitAtk(unit) > 0) {
       const range = unitRange(unit);
       for (const enemy of state.units) {
         if (enemy.ownerId === playerId) continue;
@@ -66,12 +70,16 @@ export function computeLegalActions(state: GameState, playerId: number): Action[
         actions.push({ type: "ATTACK", unitId: unit.id, targetId: enemy.id });
       }
     }
-    if (!unit.moved && !unit.attacked && unit.embarked === null) {
+    // Aircraft can overfly a village all day; taking it needs boots on the ground.
+    if (!unit.moved && !unit.attacked && unit.embarked === null && !isAir(unit.type)) {
       const tile = tileAt(state, unit.x, unit.y);
       const enemyCityHere =
         tile.cityHere !== null && cityById(state, tile.cityHere)!.ownerId !== playerId;
       if (tile.village || enemyCityHere) {
         actions.push({ type: "CAPTURE", unitId: unit.id });
+      }
+      if (player.stars >= FOUND_CITY_COST && canFoundCityOn(tile)) {
+        actions.push({ type: "FOUND_CITY", unitId: unit.id });
       }
     }
     if (!unit.moved && !unit.attacked && unit.hp < unit.maxHp) {
@@ -126,6 +134,7 @@ export function computeLegalActions(state: GameState, playerId: number): Action[
   for (const tile of state.tiles) {
     if (tile.cityId === null || !myCityIds.has(tile.cityId)) continue;
     harvestActionsFor(player.stars, player.techs, tile, actions);
+    if (tile.building === "naval_tower") bombardActionsFor(state, playerId, tile, watched, actions);
   }
 
   for (const city of myCities) {
@@ -136,6 +145,8 @@ export function computeLegalActions(state: GameState, playerId: number): Action[
       if (!def.trainable) continue;
       if (def.cost > player.stars) continue;
       if (!hasTech(player, def.tech)) continue;
+      // planes need an airfield, medics a hospital, somewhere in the city's land
+      if (def.requiresBuilding && !cityHasBuilding(state, city, def.requiresBuilding)) continue;
       actions.push({ type: "TRAIN", cityId: city.id, unitType: unitType as UnitType });
     }
   }
@@ -147,7 +158,7 @@ export function computeLegalActions(state: GameState, playerId: number): Action[
       if (!hasTech(player, def.tech) || player.stars < def.cost) continue;
       if (name === "walls" && city.walls) continue;
       if (name === "park" && city.parks >= MAX_PARKS_PER_CITY) continue;
-      if (name === "station" && (city.spaceStation || !cityHasSpaceport(state, city))) continue;
+      if (name === "station" && (city.spaceStation || !cityHasBuilding(state, city, "spaceport"))) continue;
       actions.push({
         type: "BUILD_IMPROVEMENT",
         cityId: city.id,
@@ -179,9 +190,40 @@ export function computeLegalActions(state: GameState, playerId: number): Action[
   return actions;
 }
 
-/** Whether the city's territory contains a spaceport tile (any pad will do). */
-function cityHasSpaceport(state: GameState, city: City): boolean {
-  return state.tiles.some((t) => t.cityId === city.id && t.building === "spaceport");
+/** Whether the city's territory contains this building (any one of them will do). */
+function cityHasBuilding(state: GameState, city: City, building: string): boolean {
+  return state.tiles.some((t) => t.cityId === city.id && t.building === building);
+}
+
+/**
+ * Ground a settling party may found a town on: open land nobody has claimed,
+ * with no village or ruin already standing there. Owning no territory is the
+ * whole test — every city's borders reach at least one tile out, so a new town
+ * can never be squeezed up against an old one.
+ */
+export function canFoundCityOn(tile: Tile): boolean {
+  if (tile.cityId !== null || tile.village || tile.cityHere !== null || tile.ruin) return false;
+  const terr = TERRAIN[tile.terrain];
+  return !terr.water && !terr.impassable;
+}
+
+/** Shots a Naval Tower may take this turn: enemy vessels in sight, in range. */
+function bombardActionsFor(
+  state: GameState,
+  playerId: number,
+  tower: Tile,
+  watched: number[],
+  actions: Action[],
+): void {
+  if (tower.firedTurn === state.turn) return; // the guns fire once a turn
+  for (const enemy of state.units) {
+    if (enemy.ownerId === playerId) continue;
+    // shore guns are for shipping: anything ashore or in orbit is not their business
+    if (enemy.embarked !== "raft" && enemy.embarked !== "ship") continue;
+    if (dist(state, tower.x, tower.y, enemy.x, enemy.y) > NAVAL_TOWER_RANGE) continue;
+    if (!watched[idx(state, enemy.x, enemy.y)]) continue;
+    actions.push({ type: "BOMBARD", x: tower.x, y: tower.y, targetId: enemy.id });
+  }
 }
 
 function harvestActionsFor(
@@ -201,9 +243,7 @@ function harvestActionsFor(
 
   if (tile.building === null) {
     for (const [name, def] of Object.entries(BUILDING_DEFS)) {
-      if (def.terrain !== tile.terrain) continue;
-      if ("needsResource" in def && def.needsResource !== tile.resource) continue;
-      if ((name === "lumber_hut" || name === "spaceport") && tile.resource !== null) continue;
+      if (!buildingFits(def, tile.terrain, tile.resource, tile.tilled)) continue;
       if (!techs.includes(def.tech) || stars < def.cost) continue;
       actions.push({ type: "BUILD", x: tile.x, y: tile.y, building: name as keyof typeof BUILDING_DEFS });
     }

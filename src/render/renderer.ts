@@ -1,5 +1,6 @@
 import type { GameState, Tile, Unit } from "../engine/state";
 import { idx, cityById, inBounds } from "../engine/state";
+import { isAir } from "../data/units";
 import { tribeById } from "../data/tribes";
 import { TILE_W, TILE_H, gridToWorld, worldToGrid, drawOrder } from "./iso";
 import { drawCharacter } from "./unitArt";
@@ -70,6 +71,9 @@ export interface ViewOptions {
 
 /** Fits the 100-unit-tall authored figures onto a 72x36 iso tile. */
 const UNIT_ART_SCALE = 0.62;
+
+/** How far above its tile an aircraft is drawn, so it reads as flying over it. */
+const AIR_LIFT = 16;
 
 /** Draw order only depends on map size, but the loop runs every frame. */
 const drawOrderCache = new Map<number, Array<[number, number]>>();
@@ -570,6 +574,9 @@ function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: numbe
 
 function drawUnit(ctx: CanvasRenderingContext2D, state: GameState, unit: Unit, wx: number, wy: number, selected: boolean, attackable: boolean): void {
   const tribe = tribeById(state.players[unit.ownerId].tribeId);
+  // An aircraft is over the tile rather than on it, so its figure floats clear
+  // of the ground while its rings and shadow stay down where the tile is.
+  const lift = isAir(unit.type) ? AIR_LIFT : 0;
 
   // Rings go down first so the figure stands on top of them.
   if (unit.fortified) {
@@ -601,7 +608,7 @@ function drawUnit(ctx: CanvasRenderingContext2D, state: GameState, unit: Unit, w
     tribe: tribe.id,
     type: unit.embarked === "orbit" ? unit.type : (unit.embarked ?? unit.type),
     x: wx,
-    y: wy + 4,
+    y: wy + 4 - lift,
     scale: UNIT_ART_SCALE,
     veteran: unit.veteran,
     acted: unit.moved && unit.attacked,

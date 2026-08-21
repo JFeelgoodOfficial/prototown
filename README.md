@@ -28,7 +28,14 @@ Open the printed URL, pick a tribe, and start a game.
 
 Click units to select, click highlighted tiles to move, click ringed
 enemies to attack. Capture villages to found cities, harvest resources to
-level them up, research the 25-tech tree, and out-fight the AI.
+level them up, research the tech tree, and out-fight the AI.
+
+Later on the map opens up: mine any peak you hold and plough any field you
+have already picked clean; raise Naval Towers that shell passing shipping,
+Airfields whose scouts and bombers fly over everything, and Flak Towers that
+answer them; build Hospitals that mend your soldiers where they stand, and
+Medics who carry that care into the field. With a hundred stars saved, a unit
+on unclaimed ground can found a town of its own.
 
 ## How it works
 

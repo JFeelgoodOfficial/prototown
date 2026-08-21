@@ -1,6 +1,7 @@
 import type { GameState, Unit } from "./state";
-import { idx, coordsOf, tileCount, neighbors, unitAt, playerById, hasTech, cityById, citiesOf } from "./state";
+import { idx, coordsOf, tileCount, neighbors, unitAt, playerById, hasTech, cityById, citiesOf, disk } from "./state";
 import { TERRAIN } from "../data/terrain";
+import { isAir } from "../data/units";
 import { ROAD_MOVE_COST } from "../data/constants";
 import { unitMovIn } from "./combat";
 import { abilityOf } from "./tribeAbility";
@@ -19,6 +20,7 @@ import { abilityOf } from "./tribeAbility";
 export function reachableTiles(state: GameState, unit: Unit): Array<[number, number]> {
   // a unit in orbit is between worlds: it lands (or aborts), it does not walk
   if (unit.embarked === "orbit") return [];
+  if (isAir(unit.type)) return flightTiles(state, unit);
   const player = playerById(state, unit.ownerId);
   const start = idx(state, unit.x, unit.y);
   const canEnter = terrainOpenTo(state, unit.ownerId);
@@ -98,6 +100,23 @@ export function reachableTiles(state: GameState, unit: Unit): Array<[number, num
 }
 
 /**
+ * Where an aircraft can be at the end of its turn. Nothing on the ground is in
+ * its way: peaks, woods, deep ocean and enemy lines all pass underneath, so the
+ * reachable set is simply every tile within its move in steps. It still cannot
+ * come to rest on top of another unit.
+ */
+function flightTiles(state: GameState, unit: Unit): Array<[number, number]> {
+  const out: Array<[number, number]> = [];
+  for (const [x, y] of disk(state, unit.x, unit.y, unitMovIn(state, unit))) {
+    if (x === unit.x && y === unit.y) continue;
+    if (state.tiles[idx(state, x, y)].terrain === "void") continue;
+    if (unitAt(state, x, y)) continue;
+    out.push([x, y]);
+  }
+  return out;
+}
+
+/**
  * Land tiles belonging to this player's cities — the ground Roads runs over.
  * Built in one pass because the BFS asks about it on every edge it considers.
  */
@@ -113,11 +132,12 @@ function roadNetwork(state: GameState, playerId: number): Uint8Array {
   return mask;
 }
 
-/** Tiles standing next to an enemy unit, which end a move on entry. */
+/** Tiles standing next to an enemy unit, which end a move on entry. Aircraft
+    hold no ground, so nothing on the march below them has to stop for one. */
 function enemyAdjacencyMask(state: GameState, playerId: number): Uint8Array {
   const mask = new Uint8Array(tileCount(state));
   for (const u of state.units) {
-    if (u.ownerId === playerId) continue;
+    if (u.ownerId === playerId || isAir(u.type)) continue;
     for (const [x, y] of neighbors(state, u.x, u.y)) mask[idx(state, x, y)] = 1;
   }
   return mask;
