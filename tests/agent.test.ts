@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { makeTestState, addUnit } from "./helpers";
 import { HeuristicAgent } from "../src/ai/heuristicAgent";
 import { computeLegalActions } from "../src/engine/legalActions";
+import { unitById } from "../src/engine/state";
 import { applyAction } from "../src/engine/reducer";
 import { actionKey } from "../src/engine/actions";
 import { DIFFICULTY_PERSONALITY } from "../src/game/difficulty";
@@ -75,6 +76,20 @@ describe("agent search", () => {
     expect(pick).toMatchObject({ type: "LAUNCH_NUKE", cityId: s.cities[1].id });
     expect(pick).not.toMatchObject({ unitId: overhead.id });
     expect(pick).toMatchObject({ unitId: standoff.id });
+  });
+
+  it("never walks a unit into a firestorm, whatever is on the far side", () => {
+    const s = makeTestState(10);
+    s.currentPlayerId = 0;
+    const rider = addUnit(s, 0, "rider", 3, 3);
+    s.tiles[3 * s.size + 4].village = true; // the prize, straight through the fire
+    for (let y = 2; y <= 4; y++) s.tiles[y * s.size + 4].fireOutTurn = s.turn + 2;
+
+    const pick = new HeuristicAgent(HARD).chooseAction(s, 0);
+    const burning = (a: ReturnType<HeuristicAgent["chooseAction"]>) =>
+      a.type === "MOVE" && a.x === 4 && a.y >= 2 && a.y <= 4;
+    expect(burning(pick)).toBe(false);
+    expect(unitById(applyAction(s, pick), rider.id)).toBeDefined();
   });
 
   it("a strong enough prize still outweighs the risk", () => {

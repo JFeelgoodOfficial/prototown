@@ -1,6 +1,17 @@
 import { useState } from "react";
 import { useGame } from "./store";
-import { unitById, tileAt, cityById, unitAt, dist, type GameState, type Tile, type City } from "../engine/state";
+import {
+  unitById,
+  tileAt,
+  cityById,
+  unitAt,
+  dist,
+  isBurning,
+  type GameState,
+  type Tile,
+  type City,
+  type Unit,
+} from "../engine/state";
 import { UNITS, NAVAL, ORBIT, type UnitType } from "../data/units";
 import {
   HARVEST_DEFS,
@@ -9,6 +20,9 @@ import {
   FOUND_CITY_COST,
   NAVAL_TOWER_RANGE,
   NUKE_DELIVERY_RANGE,
+  FIRESTORM_COST,
+  FIRESTORM_LENGTH,
+  FIRESTORM_BURN_TURNS,
 } from "../data/constants";
 import { cityIncome, popForNextLevel, cityUnitCount, cityCapacity } from "../engine/economy";
 import UnitPortrait from "./UnitPortrait";
@@ -33,8 +47,12 @@ export default function SidePanel() {
         a.type !== "MOVE" &&
         a.type !== "ATTACK" &&
         a.type !== "LAND" &&
-        a.type !== "LAUNCH_NUKE",
+        a.type !== "LAUNCH_NUKE" &&
+        a.type !== "FIRESTORM",
     );
+    // The eight firestorm headings get a compass of their own below, rather
+    // than eight identical buttons in with the rest.
+    const runs = game.legal.filter((a) => a.type === "FIRESTORM" && a.unitId === unit.id);
     // A nuke run is aimed at a city, not fired from this panel: it is offered
     // (behind its own confirmation) when that city is the thing selected.
     const canNuke = game.legal.some((a) => a.type === "LAUNCH_NUKE" && a.unitId === unit.id);
@@ -80,6 +98,7 @@ export default function SidePanel() {
             <ActionButton key={JSON.stringify(a)} action={a} />
           ))}
         </div>
+        {runs.length > 0 && <FirestormCompass unit={unit} runs={runs} />}
       </Panel>
     );
   }
@@ -109,7 +128,9 @@ export default function SidePanel() {
             <div className="flex flex-wrap gap-2">
               {trains.length === 0 && (
                 <span className="text-xs text-white/50">
-                  {occupied
+                  {isBurning(s, tile)
+                    ? "The city tile is on fire — nobody musters until it burns out."
+                    : occupied
                     ? "City tile is occupied — move the unit first."
                     : cityUnitCount(s, city.id) >= cityCapacity(s, city)
                       ? "At unit capacity — level up the city."
@@ -164,6 +185,17 @@ export default function SidePanel() {
           </Panel>
         );
       }
+    }
+
+    if (isBurning(s, tile)) {
+      return (
+        <Panel title="Burning ground">
+          <div className="mt-1 text-xs text-amber-300">
+            A firestorm is still raging here. Anything on foot that walks in dies in it; only aircraft
+            pass over. It burns out on turn {tile.fireOutTurn}.
+          </div>
+        </Panel>
+      );
     }
 
     if (tile.ruin) {
@@ -226,6 +258,62 @@ function ActionButton({ action }: { action: Action }) {
     >
       {labelFor(action, game.state!)}
     </button>
+  );
+}
+
+/** The eight headings, laid out as they sit around the plane on the compass. */
+const HEADINGS: Array<[number, number, string]> = [
+  [-1, -1, "↖"], [0, -1, "↑"], [1, -1, "↗"],
+  [-1, 0, "←"], [0, 0, "✈"], [1, 0, "→"],
+  [-1, 1, "↙"], [0, 1, "↓"], [1, 1, "↘"],
+];
+
+/**
+ * Picking the heading for a firestorm run. Eight identical buttons in the row
+ * of actions would say nothing; a compass around the plane says all of it.
+ */
+function FirestormCompass({ unit, runs }: { unit: Unit; runs: Action[] }) {
+  const game = useGame();
+  const byHeading = new Map(
+    runs.map((r) => [r.type === "FIRESTORM" ? `${r.x - unit.x},${r.y - unit.y}` : "", r]),
+  );
+  return (
+    <div className="mt-3 flex items-start gap-3">
+      <div className="grid w-[96px] shrink-0 grid-cols-3 gap-1">
+        {HEADINGS.map(([dx, dy, glyph]) => {
+          const run = byHeading.get(`${dx},${dy}`);
+          if (!run) {
+            return (
+              <div
+                key={`${dx},${dy}`}
+                className="flex h-7 items-center justify-center rounded bg-white/5 text-sm text-white/25"
+              >
+                {dx === 0 && dy === 0 ? glyph : ""}
+              </div>
+            );
+          }
+          return (
+            <button
+              key={`${dx},${dy}`}
+              className="h-7 rounded bg-orange-700 text-sm font-bold hover:bg-orange-500"
+              onClick={() => game.dispatch(run)}
+            >
+              {glyph}
+            </button>
+          );
+        })}
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="text-xs font-semibold uppercase text-white/50">
+          🔥 Firestorm (⭐{FIRESTORM_COST})
+        </div>
+        <div className="mt-1 text-xs text-white/60">
+          Burns {FIRESTORM_LENGTH} tiles out along that heading. Everything standing in the fire dies —
+          yours as readily as theirs — buildings burn down to bare field, and the ground keeps burning
+          for {FIRESTORM_BURN_TURNS} turns.
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -305,6 +393,8 @@ function labelFor(a: Action, s: GameState): string {
       return `${UNITS[a.unitType as UnitType].name} (⭐${UNITS[a.unitType as UnitType].cost})`;
     case "LAUNCH_NUKE":
       return "☢ Launch Nuke";
+    case "FIRESTORM":
+      return `🔥 Firestorm (⭐${FIRESTORM_COST})`;
     case "LAUNCH":
       return "🚀 Launch to orbit";
     default:

@@ -1492,6 +1492,53 @@ function drawCity(ctx: Ctx, city: CityArt, k: TribeKit): void {
   }
 }
 
+/**
+ * Ground still burning from a firestorm run: scorched earth, three tongues of
+ * flame leaning the same way, and the smoke coming off them. Drawn per variant
+ * so a whole burning line does not look stamped out of one mould.
+ */
+function drawFire(ctx: Ctx, variant: number): void {
+  /* the ground it is burning on, blackened and glowing at the edges */
+  ctx.fillStyle = "rgba(24,14,10,0.55)";
+  ctx.beginPath();
+  ctx.ellipse(0, 2, 19, 9, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = RG(ctx, 0, 0, 20, [
+    [0, "rgba(255,150,50,0.42)"],
+    [0.6, "rgba(220,80,30,0.2)"],
+    [1, "rgba(180,50,20,0)"],
+  ]);
+  ctx.beginPath();
+  ctx.ellipse(0, 1, 20, 10, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  const flames: Array<[number, number, number]> = [
+    [-8, 3, 0.85],
+    [7, 4, 0.95],
+    [0, 0, 1.25],
+  ];
+  flames.forEach(([fx, fy, scale], i) => {
+    const lean = (hash(variant, i, 7) - 0.5) * 5;
+    const h = 15 * scale;
+    const w = 5.2 * scale;
+    /* outer flame, then a hotter core inside it */
+    plate(
+      ctx,
+      [[fx - w, fy], [fx - w * 0.45, fy - h * 0.55], [fx + lean, fy - h], [fx + w * 0.5, fy - h * 0.5], [fx + w, fy]],
+      "#e8641c",
+      { hi: "#ffd166", lo: "#8c2408", rimA: 0.25 },
+    );
+    plate(
+      ctx,
+      [[fx - w * 0.45, fy], [fx + lean * 0.6, fy - h * 0.62], [fx + w * 0.45, fy]],
+      "#ffc23c",
+      { hi: "#fff3c0", lo: "#e2761a", rim: false },
+    );
+    if (i === 2) orb(ctx, fx, fy - 1.5, w * 0.9, 2.4, "#ffd98a", { rim: false });
+  });
+  smoke(ctx, 2, -18, 4);
+}
+
 /* ── prop dispatch, for the sprite cache ── */
 
 export type PropKind =
@@ -1501,6 +1548,7 @@ export type PropKind =
   | { kind: "building"; building: BuildingType; tribeId: string }
   | { kind: "village" }
   | { kind: "ruin" }
+  | { kind: "fire"; variant: number }
   | { kind: "city"; tribeId: string; level: number; walls: boolean; isCapital: boolean };
 
 /** Stable identity of a prop: two props with the same key draw identically. */
@@ -1518,6 +1566,8 @@ export function propKey(p: PropKind): string {
       return "village";
     case "ruin":
       return "ruin";
+    case "fire":
+      return `fire|${p.variant}`;
     case "city":
       return `city|${p.tribeId}|${Math.min(4, 1 + Math.floor(p.level / 2))}|${p.walls}|${p.isCapital}|${p.level >= 2}`;
   }
@@ -1543,6 +1593,9 @@ export function drawProp(ctx: Ctx, p: PropKind): void {
       return;
     case "ruin":
       drawRuin(ctx);
+      return;
+    case "fire":
+      drawFire(ctx, p.variant);
       return;
     case "city":
       drawCity(ctx, p, kitFor(p.tribeId));

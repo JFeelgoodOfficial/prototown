@@ -11,12 +11,15 @@ import {
   neighbors,
   idx,
   isPlayable,
+  isBurning,
+  burnsUnit,
   disk,
   dist,
   planetOf,
 } from "./state";
 import type { Action } from "./actions";
 import { bombardDamage, resolveCombat, unitRange } from "./combat";
+import { firestormLine } from "./legalActions";
 import { terrainOpenTo } from "./movement";
 import { computeVisibility } from "./fog";
 import { applyMedicalCare, flakFireAt } from "./support";
@@ -46,6 +49,8 @@ import {
   RUIN_MAP_RADIUS,
   SURVEY_SITES,
   SURVEY_RADIUS,
+  FIRESTORM_COST,
+  FIRESTORM_BURN_TURNS,
 } from "../data/constants";
 
 /**
@@ -341,6 +346,34 @@ export function applyAction(prev: GameState, action: Action): GameState {
       break;
     }
 
+    case "FIRESTORM": {
+      const bomber = mustUnit(state, action.unitId);
+      const line = firestormLine(state, bomber.x, bomber.y, action.x, action.y);
+      player.stars -= FIRESTORM_COST;
+      bomber.moved = true;
+      bomber.attacked = true;
+      bomber.fortified = false;
+
+      for (const [x, y] of line) {
+        const tile = tileAt(state, x, y);
+        // Whatever was built here goes up with everything else and leaves bare
+        // ground. Water keeps its terrain: a burnt-out port is still a harbour.
+        if (tile.building !== null) {
+          tile.building = null;
+          tile.tilled = false;
+          tile.firedTurn = null;
+          if (!TERRAIN[tile.terrain].water && !TERRAIN[tile.terrain].impassable) tile.terrain = "field";
+        }
+        tile.fireOutTurn = state.turn + FIRESTORM_BURN_TURNS;
+      }
+
+      // Everything caught in the line burns where it stands — the sweep at the
+      // foot of this function does that, to friend and enemy alike.
+      computeVisibility(state, player);
+      updateWinState(state);
+      break;
+    }
+
     case "CHOOSE_REWARD": {
       const city = cityById(state, action.cityId)!;
       city.pendingReward = null;
@@ -355,7 +388,25 @@ export function applyAction(prev: GameState, action: Action): GameState {
     }
   }
 
+  burnUnitsStandingInFire(state);
   return state;
+}
+
+/**
+ * Fire kills whatever is standing in it, however it came to be there: walked
+ * in, advanced into it over a body, landed in it, or was trained into a city
+ * with the flames still on its doorstep. Aircraft are above it and unharmed.
+ *
+ * Running this once at the foot of every action is what keeps the rule a single
+ * one, instead of a check bolted onto each of the ways a unit can end a turn on
+ * a tile it should not have survived.
+ */
+function burnUnitsStandingInFire(state: GameState): void {
+  if (!state.tiles.some((t) => isBurning(state, t))) return;
+  const survivors = state.units.filter((u) => !burnsUnit(state, tileAt(state, u.x, u.y), u));
+  if (survivors.length === state.units.length) return;
+  state.units = survivors;
+  updateWinState(state);
 }
 
 /**
@@ -587,6 +638,11 @@ function advanceTurn(state: GameState): void {
       // a full round has passed: snapshot everyone's score for the end-game graph
       state.scoreHistory.push(state.players.map((p) => playerScore(state, p.id)));
       state.turn += 1;
+      // fires that have had their two turns are cleared, so nothing keeps a
+      // dead timestamp around to be rendered or saved
+      for (const tile of state.tiles) {
+        if (tile.fireOutTurn !== null && !isBurning(state, tile)) tile.fireOutTurn = null;
+      }
       updateWinState(state);
       if (state.winnerId !== null) return;
     }

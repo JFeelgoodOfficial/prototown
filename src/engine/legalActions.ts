@@ -9,6 +9,8 @@ import {
   hasTech,
   dist,
   idx,
+  isBurning,
+  isPlayable,
   planetOf,
 } from "./state";
 import type { Action } from "./actions";
@@ -25,6 +27,8 @@ import {
   FOUND_CITY_COST,
   NAVAL_TOWER_RANGE,
   NUKE_DELIVERY_RANGE,
+  FIRESTORM_LENGTH,
+  FIRESTORM_COST,
   buildingFits,
   type CityImprovement,
 } from "../data/constants";
@@ -69,6 +73,16 @@ export function computeLegalActions(state: GameState, playerId: number): Action[
         if (dist(state, unit.x, unit.y, enemy.x, enemy.y) > range) continue;
         if (!watched[idx(state, enemy.x, enemy.y)]) continue;
         actions.push({ type: "ATTACK", unitId: unit.id, targetId: enemy.id });
+      }
+    }
+    // A firestorm run is flown down one of the eight headings, from the tile
+    // beside the plane outwards. Fog is no bar: fire falls where it is aimed,
+    // and what it finds there is found out afterwards.
+    if (canFlyFirestorm(state, unit)) {
+      for (const [dx, dy] of HEADINGS) {
+        const [ax, ay] = [unit.x + dx, unit.y + dy];
+        if (firestormLine(state, unit.x, unit.y, ax, ay).length === 0) continue;
+        actions.push({ type: "FIRESTORM", unitId: unit.id, x: ax, y: ay });
       }
     }
     // Aircraft can overfly a village all day; taking it needs boots on the ground.
@@ -141,6 +155,9 @@ export function computeLegalActions(state: GameState, playerId: number): Action[
   for (const city of myCities) {
     const occupied = unitAt(state, city.x, city.y) !== undefined;
     if (occupied) continue;
+    // Nobody musters onto burning ground: a unit trained here would walk out
+    // of the gate straight into the fire.
+    if (isBurning(state, tileAt(state, city.x, city.y))) continue;
     if (cityUnitCount(state, city.id) >= cityCapacity(state, city)) continue;
     for (const [unitType, def] of Object.entries(UNITS)) {
       if (!def.trainable) continue;
@@ -204,6 +221,64 @@ export function computeLegalActions(state: GameState, playerId: number): Action[
  */
 export function canCarryNuke(unit: Unit): boolean {
   return unit.type === "bomber" && unit.embarked === null && !unit.attacked;
+}
+
+/** The eight headings a firestorm run can be flown along. */
+const HEADINGS: Array<[number, number]> = [
+  [1, 0], [1, 1], [0, 1], [-1, 1], [-1, 0], [-1, -1], [0, -1], [1, -1],
+];
+
+/**
+ * The tiles a firestorm run burns: up to FIRESTORM_LENGTH of them, starting at
+ * (x, y) and carrying on along the heading that leads there from the plane.
+ *
+ * The line is walked one step at a time and stops the moment the next step is
+ * off the map, on void, or — where the grid is a folded-up sphere and a step
+ * across a face seam is not the neighbour it looks like — no longer adjacent to
+ * the tile before it. A run near a seam is simply a short one; nothing is ever
+ * set alight on the far side of the world.
+ */
+export function firestormLine(
+  state: GameState,
+  fromX: number,
+  fromY: number,
+  x: number,
+  y: number,
+): Array<[number, number]> {
+  const dx = x - fromX;
+  const dy = y - fromY;
+  if (Math.abs(dx) > 1 || Math.abs(dy) > 1 || (dx === 0 && dy === 0)) return [];
+  const out: Array<[number, number]> = [];
+  let px = fromX;
+  let py = fromY;
+  let cx = x;
+  let cy = y;
+  while (out.length < FIRESTORM_LENGTH) {
+    if (!isPlayable(state, cx, cy)) break;
+    if (dist(state, px, py, cx, cy) !== 1) break;
+    out.push([cx, cy]);
+    px = cx;
+    py = cy;
+    cx += dx;
+    cy += dy;
+  }
+  return out;
+}
+
+/**
+ * Whether this unit could fly a firestorm run right now. The same plane and the
+ * same unspent strike the nuke asks for — the bomb bays hold one load or the
+ * other, never both in a turn.
+ */
+export function canFlyFirestorm(state: GameState, unit: Unit): boolean {
+  const player = playerById(state, unit.ownerId);
+  return (
+    unit.type === "bomber" &&
+    unit.embarked === null &&
+    !unit.attacked &&
+    hasTech(player, "incendiaries") &&
+    player.stars >= FIRESTORM_COST
+  );
 }
 
 /** Whether the city's territory contains this building (any one of them will do). */

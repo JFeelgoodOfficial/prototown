@@ -120,6 +120,16 @@ export const FLAK_DAMAGE = 6;
  */
 export const NUKE_DELIVERY_RANGE = 3;
 
+/**
+ * Firestorm: a Bomber's incendiary run. It lays fire down a straight line of
+ * tiles starting one step off the plane's own position, kills what is standing
+ * in it, and leaves the ground burning for two turns afterwards. The munitions
+ * are bought for the run, so the same plane can fly another one next turn.
+ */
+export const FIRESTORM_LENGTH = 4;
+export const FIRESTORM_BURN_TURNS = 2;
+export const FIRESTORM_COST = 5;
+
 // Hospitals and Medics: free healing at the start of your turn, no action spent.
 export const HOSPITAL_RANGE = 2;
 export const HOSPITAL_HEAL = 3;

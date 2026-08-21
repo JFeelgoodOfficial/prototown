@@ -43,6 +43,7 @@ function normalize(state: GameState): GameState {
     // alternative is retroactively marking every empty field as worked.
     if (tile.tilled === undefined) tile.tilled = false;
     if (tile.firedTurn === undefined) tile.firedTurn = null;
+    if (tile.fireOutTurn === undefined) tile.fireOutTurn = null;
   }
   for (const city of state.cities) {
     if (city.spaceStation === undefined) city.spaceStation = false;

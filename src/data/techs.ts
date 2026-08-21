@@ -58,6 +58,7 @@ export const TECHS: TechDef[] = [
   { id: "space_travel", name: "Space Travel", tier: 4, requires: "rocketry", branch: "hunting", blurb: "Build Spaceports and Space Stations — reach the twin world." },
   { id: "flight", name: "Flight", tier: 4, requires: "mathematics", branch: "hunting", blurb: "Build Airfields — train Scout Planes and Bombers." },
   { id: "air_defence", name: "Air Defence", tier: 4, requires: "flight", branch: "hunting", blurb: "Build Flak Towers — they fire on enemy aircraft that stray near." },
+  { id: "incendiaries", name: "Incendiaries", tier: 4, requires: "flight", branch: "hunting", blurb: "Bombers fly firestorm runs — four tiles of fire that burn for two turns." },
 ];
 
 export const TECH_BY_ID: Record<string, TechDef> = Object.fromEntries(TECHS.map((t) => [t.id, t]));

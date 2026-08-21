@@ -1,8 +1,8 @@
 import type { GameState } from "../engine/state";
-import { unitById, cityById, playerById, unitsOf, idx } from "../engine/state";
+import { unitById, unitAt, cityById, playerById, unitsOf, idx } from "../engine/state";
 import type { Action } from "../engine/actions";
 import { applyAction } from "../engine/reducer";
-import { computeLegalActions } from "../engine/legalActions";
+import { computeLegalActions, firestormLine } from "../engine/legalActions";
 import { newGame, type NewGameOptions } from "../engine/mapgen";
 import { HeuristicAgent } from "../ai/heuristicAgent";
 import type { AiPersonality } from "../ai/evaluate";
@@ -66,6 +66,8 @@ export const MOVE_ANIM_MS = 180;
 export const HIT_ANIM_MS = 260;
 export const MISSILE_ANIM_MS = 900;
 export const NUKE_ANIM_MS = 1600;
+/** Delay between one tile of a firestorm run catching and the next. */
+export const FIRESTORM_STEP_MS = 110;
 
 const AI_STEP_MS = 140;
 const AI_ACTION_CAP = 250;
@@ -426,6 +428,19 @@ export class GameController {
         this.addFloat(city.x, city.y, `☢ ${city.name} destroyed`, "#ffd75e", performance.now() + NUKE_ANIM_MS * 0.35);
       }
       playSound("nuke");
+    } else if (action.type === "FIRESTORM") {
+      const bomber = unitById(this.state, action.unitId);
+      const line = bomber ? firestormLine(this.state, bomber.x, bomber.y, action.x, action.y) : [];
+      const before = this.state;
+      this.state = applyAction(this.state, action);
+      // The run walks down the line: each tile lights a moment after the one
+      // behind it, and anything that was standing there is marked as it goes.
+      line.forEach(([x, y], i) => {
+        const at = performance.now() + i * FIRESTORM_STEP_MS;
+        const victim = unitAt(before, x, y);
+        this.addFloat(x, y, victim && !unitById(this.state!, victim.id) ? "☠" : "🔥", "#ff9a3c", at);
+      });
+      playSound("missile");
     } else if (action.type === "BOMBARD") {
       const target = unitById(this.state, action.targetId);
       const next = applyAction(this.state, action);
@@ -630,6 +645,11 @@ export class GameController {
       case "LAUNCH_NUKE": {
         const c = cityById(this.state, action.cityId);
         return c ? seen(c.x, c.y) : false;
+      }
+      case "FIRESTORM": {
+        const bomber = unitById(this.state, action.unitId);
+        const line = bomber ? firestormLine(this.state, bomber.x, bomber.y, action.x, action.y) : [];
+        return line.some(([x, y]) => seen(x, y));
       }
       default:
         return false;

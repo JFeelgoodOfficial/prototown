@@ -1,11 +1,12 @@
 import type { GameState, Unit } from "../engine/state";
-import { unitById, cityById, tileAt, playerById, dist, idx, neighbors, citiesOf, unitsOf, hasTech, planetOf } from "../engine/state";
+import { unitById, cityById, tileAt, unitAt, playerById, dist, idx, neighbors, citiesOf, unitsOf, hasTech, burnsUnit, planetOf } from "../engine/state";
+import { firestormLine } from "../engine/legalActions";
 import type { Action } from "../engine/actions";
 import { bombardDamage, resolveCombat } from "../engine/combat";
 import { UNITS, isAir } from "../data/units";
 import { TECH_BY_ID } from "../data/techs";
 import { TERRAIN } from "../data/terrain";
-import { HARVEST_DEFS } from "../data/constants";
+import { HARVEST_DEFS, FIRESTORM_COST } from "../data/constants";
 import { cityUnitCount, cityCapacity } from "../engine/economy";
 
 export interface AiPersonality {
@@ -244,9 +245,37 @@ export function scoreAction(
       return (40 + damage * 4 + (kills ? 30 + UNITS[target.type].cost * 8 : 0)) * personality.aggression;
     }
 
+    case "FIRESTORM": {
+      const bomber = unitById(state, action.unitId);
+      if (!bomber) return -Infinity;
+      let score = -FIRESTORM_COST * 3; // the munitions are never free
+      for (const [x, y] of firestormLine(state, bomber.x, bomber.y, action.x, action.y)) {
+        const tile = tileAt(state, x, y);
+        const victim = unitAt(state, x, y);
+        if (victim && !isAir(victim.type)) {
+          // no combat roll, no retaliation: a kill in the line is a certainty
+          score += victim.ownerId === playerId
+            ? -(40 + UNITS[victim.type].cost * 8)
+            : 55 + UNITS[victim.type].cost * 8;
+        }
+        if (tile.building !== null) {
+          const owner = tile.cityId !== null ? cityById(state, tile.cityId)?.ownerId : undefined;
+          if (owner === playerId) score -= 60;
+          else if (owner !== undefined) score += 30;
+        }
+        // ground left burning is ground the enemy cannot walk back over
+        const enemyGround = tile.cityId !== null && cityById(state, tile.cityId)?.ownerId !== playerId;
+        if (enemyGround) score += 6;
+      }
+      return score * personality.aggression;
+    }
+
     case "MOVE": {
       const unit = unitById(state, action.unitId);
       if (!unit) return -Infinity;
+      // Fire is not a risk to weigh against the ground it covers: whatever
+      // walks in dies. Nothing on the far side of it is worth that.
+      if (burnsUnit(state, tileAt(state, action.x, action.y), unit)) return -Infinity;
       const best = nearestObjective(state, unit, objectives);
       if (!best) return 0;
       const before = dist(state, unit.x, unit.y, best.x, best.y);
@@ -420,6 +449,8 @@ export function scoreAction(
       if (["strategy", "construction"].includes(tech.id)) score += 8 * personality.aggression;
       // aircraft and anti-air only start paying once there is a real war on
       if (["flight", "air_defence"].includes(tech.id)) score += 6 * personality.aggression;
+      // incendiaries are worth having exactly as far as there is a war on
+      if (tech.id === "incendiaries") score += 10 * personality.aggression;
       // holding the bomb with no way to fly it is the one time Flight is urgent
       if (tech.id === "flight" && hasTech(player, "atomic_theory") && !state.nukeLaunched) score += 40;
       // shore guns matter exactly as much as there is enemy shipping about
