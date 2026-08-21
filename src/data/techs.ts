@@ -54,7 +54,7 @@ export const TECHS: TechDef[] = [
   { id: "mathematics", name: "Mathematics", tier: 3, requires: "forestry", branch: "hunting", blurb: "Train Catapults." },
   { id: "spiritualism", name: "Spiritualism", tier: 3, requires: "archery", branch: "hunting", blurb: "Build Grand Parks (⭐12)." },
   { id: "rocketry", name: "Rocketry", tier: 4, requires: "mathematics", branch: "hunting", blurb: "Train Missile Launchers." },
-  { id: "atomic_theory", name: "Atomic Theory", tier: 4, requires: "rocketry", branch: "hunting", blurb: "Launch one nuke — once per game, for everyone." },
+  { id: "atomic_theory", name: "Atomic Theory", tier: 4, requires: "rocketry", branch: "hunting", blurb: "Arm one nuke — flown by a Bomber, once per game, for everyone." },
   { id: "space_travel", name: "Space Travel", tier: 4, requires: "rocketry", branch: "hunting", blurb: "Build Spaceports and Space Stations — reach the twin world." },
   { id: "flight", name: "Flight", tier: 4, requires: "mathematics", branch: "hunting", blurb: "Build Airfields — train Scout Planes and Bombers." },
   { id: "air_defence", name: "Air Defence", tier: 4, requires: "flight", branch: "hunting", blurb: "Build Flak Towers — they fire on enemy aircraft that stray near." },

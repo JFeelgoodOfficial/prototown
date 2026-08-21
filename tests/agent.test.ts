@@ -63,6 +63,20 @@ describe("agent search", () => {
     expect(blind.type).toBe("MOVE");
   });
 
+  it("flies the nuke with the bomber it has, from a tile the blast will not reach", () => {
+    const s = makeTestState(10);
+    s.currentPlayerId = 0;
+    s.players[0].techs.push("atomic_theory");
+    addUnit(s, 0, "warrior", 6, 6); // keeps the enemy capital watched
+    const overhead = addUnit(s, 0, "bomber", 7, 8); // would die in its own blast
+    const standoff = addUnit(s, 0, "bomber", 5, 6); // three tiles out, comes home
+
+    const pick = new HeuristicAgent(HARD).chooseAction(s, 0);
+    expect(pick).toMatchObject({ type: "LAUNCH_NUKE", cityId: s.cities[1].id });
+    expect(pick).not.toMatchObject({ unitId: overhead.id });
+    expect(pick).toMatchObject({ unitId: standoff.id });
+  });
+
   it("a strong enough prize still outweighs the risk", () => {
     // The search informs the decision, it does not veto it: a village next to
     // an enemy is still worth taking with a cheap unit.

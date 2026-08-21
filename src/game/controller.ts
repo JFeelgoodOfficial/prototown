@@ -416,7 +416,11 @@ export class GameController {
       this.state = next;
     } else if (action.type === "LAUNCH_NUKE") {
       const city = cityById(this.state, action.cityId);
+      const bomber = unitById(this.state, action.unitId);
       this.state = applyAction(this.state, action);
+      // Name the plane that carried it: from a stand-off tile it is the only
+      // sign of where the bomb came from.
+      if (bomber) this.addFloat(bomber.x, bomber.y, "☢ bomb away", "#ffd75e", performance.now());
       if (city) {
         this.blasts.push({ x: city.x, y: city.y, bornAt: performance.now(), duration: NUKE_ANIM_MS });
         this.addFloat(city.x, city.y, `☢ ${city.name} destroyed`, "#ffd75e", performance.now() + NUKE_ANIM_MS * 0.35);

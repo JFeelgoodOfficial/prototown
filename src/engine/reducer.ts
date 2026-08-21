@@ -299,7 +299,14 @@ export function applyAction(prev: GameState, action: Action): GameState {
 
     case "LAUNCH_NUKE": {
       const target = cityById(state, action.cityId)!;
+      const bomber = mustUnit(state, action.unitId);
       state.nukeLaunched = true;
+
+      // The run is the plane's whole turn, and it makes it from where it
+      // stands: no repositioning afterwards, and nothing left to strike with.
+      bomber.moved = true;
+      bomber.attacked = true;
+      bomber.fortified = false;
 
       // The blast is the city tile plus its 8 neighbours. Any city caught in
       // it dies with the target, or its orphaned husk would keep rendering.
@@ -318,6 +325,8 @@ export function applyAction(prev: GameState, action: Action): GameState {
         tile.cityId = null;
       }
 
+      // Nothing inside the ring survives — the bomber included, if it dropped
+      // from directly overhead instead of standing off.
       state.units = state.units.filter((u) => dist(state, u.x, u.y, target.x, target.y) > 1);
       state.cities = state.cities.filter((c) => !deadCityIds.has(c.id));
       for (const tile of state.tiles) {

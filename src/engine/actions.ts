@@ -19,7 +19,7 @@ export type Action =
   | { type: "RESEARCH"; techId: string }
   | { type: "BOMBARD"; x: number; y: number; targetId: number }
   | { type: "FOUND_CITY"; unitId: number }
-  | { type: "LAUNCH_NUKE"; cityId: number }
+  | { type: "LAUNCH_NUKE"; unitId: number; cityId: number }
   | { type: "CHOOSE_REWARD"; cityId: number; reward: string }
   | { type: "END_TURN" };
 

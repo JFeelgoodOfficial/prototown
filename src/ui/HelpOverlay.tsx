@@ -83,6 +83,7 @@ export default function HelpOverlay({ onClose }: { onClose: () => void }) {
               "Flight builds Airfields, and a city with one can train aircraft.",
               "Scout Planes are unarmed and see three tiles — they cross mountains, forests and open ocean as if none of it were there.",
               "Bombers strike from above: walls, woods and dug-in positions count for nothing against them.",
+              "A Bomber is also the only thing that carries the nuke: with Atomic Theory known, send one from within three tiles of an enemy city you can see. Anything in the blast dies — the plane included, if it dropped from overhead.",
               "Aircraft hold no ground — they cannot capture a village or a city, and cannot claim ruins.",
               "Air Defence builds Flak Towers. Any enemy aircraft that flies within three tiles of one is fired on as it arrives.",
             ]}

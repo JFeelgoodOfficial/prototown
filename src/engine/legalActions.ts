@@ -1,4 +1,4 @@
-import type { GameState, Tile, City } from "./state";
+import type { GameState, Tile, City, Unit } from "./state";
 import {
   citiesOf,
   unitsOf,
@@ -24,6 +24,7 @@ import {
   REWARD_STARS_AMOUNT,
   FOUND_CITY_COST,
   NAVAL_TOWER_RANGE,
+  NUKE_DELIVERY_RANGE,
   buildingFits,
   type CityImprovement,
 } from "../data/constants";
@@ -177,17 +178,32 @@ export function computeLegalActions(state: GameState, playerId: number): Action[
     actions.push({ type: "RESEARCH", techId: tech.id });
   }
 
-  // The game's single nuke: any enemy city in live sight, until someone fires it.
+  // The game's single nuke: a bomb rides to its target under a Bomber and
+  // nothing else. It needs a plane with its sortie still in hand, an enemy city
+  // in live sight within that plane's reach, and nobody to have fired it yet.
   if (!state.nukeLaunched && hasTech(player, "atomic_theory")) {
-    for (const city of state.cities) {
-      if (city.ownerId === playerId) continue;
-      if (!watched[idx(state, city.x, city.y)]) continue;
-      actions.push({ type: "LAUNCH_NUKE", cityId: city.id });
+    const bombers = unitsOf(state, playerId).filter(canCarryNuke);
+    for (const bomber of bombers) {
+      for (const city of state.cities) {
+        if (city.ownerId === playerId) continue;
+        if (!watched[idx(state, city.x, city.y)]) continue;
+        if (dist(state, bomber.x, bomber.y, city.x, city.y) > NUKE_DELIVERY_RANGE) continue;
+        actions.push({ type: "LAUNCH_NUKE", unitId: bomber.id, cityId: city.id });
+      }
     }
   }
 
   actions.push({ type: "END_TURN" });
   return actions;
+}
+
+/**
+ * Whether this unit could fly the bomb out right now: a Bomber, on the wing
+ * rather than riding a capsule, with its one strike of the turn unspent. Having
+ * already moved is no bar — flying in and dropping is one sortie.
+ */
+export function canCarryNuke(unit: Unit): boolean {
+  return unit.type === "bomber" && unit.embarked === null && !unit.attacked;
 }
 
 /** Whether the city's territory contains this building (any one of them will do). */

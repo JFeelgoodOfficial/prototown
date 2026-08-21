@@ -360,7 +360,15 @@ export function scoreAction(
       // half as much larger as its aggression — scaling it fully starves the
       // economy that pays for the army in the first place.
       const wantArmy = Math.round((cities * 2 + 1) * (1 + (personality.aggression - 1) * 0.5));
-      if (army >= wantArmy) return -5;
+      // The bomb has no other ride. With Atomic Theory in hand and the nuke
+      // still on the table, the first Bomber is worth a slot however full the
+      // roster already is.
+      const needsNukeRide =
+        action.unitType === "bomber" &&
+        !state.nukeLaunched &&
+        hasTech(player, "atomic_theory") &&
+        !unitsOf(state, playerId).some((u) => u.type === "bomber");
+      if (army >= wantArmy && !needsNukeRide) return -5;
       if (cityUnitCount(state, city.id) >= cityCapacity(state, city)) return -Infinity;
       const def = UNITS[action.unitType];
       // A medic is a support piece, not a soldier: worth a slot only while
@@ -387,7 +395,8 @@ export function scoreAction(
         const hardened =
           state.units.filter((u) => u.ownerId !== playerId && u.fortified).length +
           state.cities.filter((c) => c.ownerId !== playerId && c.walls).length;
-        return (24 + def.cost * 3 + hardened * 12) * personality.aggression;
+        const carrier = needsNukeRide ? 200 : 0;
+        return carrier + (24 + def.cost * 3 + hardened * 12) * personality.aggression;
       }
       return (20 + def.cost * 3 + (army < cities ? 15 : 0)) * personality.aggression;
     }
@@ -398,8 +407,12 @@ export function scoreAction(
       let score = 30 - tech.tier * 6;
       if (["organization", "hunting", "fishing", "farming", "forestry", "mining"].includes(tech.id)) score += 12;
       if (["archery", "shields", "smithery", "chivalry", "rocketry"].includes(tech.id)) score += 8 * personality.aggression;
-      // the one nuke is only worth researching toward while it is still on the table
-      if (tech.id === "atomic_theory") score += state.nukeLaunched ? -10 : 8 * personality.aggression;
+      // The one nuke is only worth researching toward while it is still on the
+      // table — and only a Bomber can carry it, so the bomb without Flight is a
+      // warhead with nowhere to sit.
+      if (tech.id === "atomic_theory") {
+        score += state.nukeLaunched ? -10 : hasTech(player, "flight") ? 8 * personality.aggression : -6;
+      }
       // techs that pay for themselves: income, cheaper research, star windfalls
       if (["trade", "philosophy", "whaling"].includes(tech.id)) score += 12 * personality.economy;
       // roads is worth more the more ground there is to cover
@@ -407,6 +420,8 @@ export function scoreAction(
       if (["strategy", "construction"].includes(tech.id)) score += 8 * personality.aggression;
       // aircraft and anti-air only start paying once there is a real war on
       if (["flight", "air_defence"].includes(tech.id)) score += 6 * personality.aggression;
+      // holding the bomb with no way to fly it is the one time Flight is urgent
+      if (tech.id === "flight" && hasTech(player, "atomic_theory") && !state.nukeLaunched) score += 40;
       // shore guns matter exactly as much as there is enemy shipping about
       if (tech.id === "coastal_defence") {
         score += state.units.some((u) => u.ownerId !== playerId && u.embarked !== null) ? 14 : -6;
@@ -454,6 +469,10 @@ export function scoreAction(
       for (const u of unitsOf(state, playerId)) {
         if (dist(state, u.x, u.y, city.x, city.y) <= 1) score -= 45;
       }
+      // Which plane carries it is a real choice: one that drops from inside the
+      // ring goes up with the city, where a stand-off run brings its crew home.
+      const carrier = unitById(state, action.unitId);
+      if (carrier && dist(state, carrier.x, carrier.y, city.x, city.y) <= 1) score -= 60;
       for (const c of citiesOf(state, playerId)) {
         if (dist(state, c.x, c.y, city.x, city.y) <= 1) score -= 800;
       }

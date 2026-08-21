@@ -113,6 +113,13 @@ export const NAVAL_TOWER_ATK = 4;
 export const FLAK_RANGE = 3;
 export const FLAK_DAMAGE = 6;
 
+/**
+ * The bomb has no legs of its own: only a Bomber carries it, and only this far
+ * out from where it is parked — one sortie's flight, the same three tiles the
+ * plane could have crossed under its own power.
+ */
+export const NUKE_DELIVERY_RANGE = 3;
+
 // Hospitals and Medics: free healing at the start of your turn, no action spent.
 export const HOSPITAL_RANGE = 2;
 export const HOSPITAL_HEAL = 3;
