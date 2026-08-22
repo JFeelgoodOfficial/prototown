@@ -86,11 +86,6 @@ export default function SidePanel() {
                 Flies over anything — but holds no ground, and enemy flak fires on it.
               </div>
             )}
-            {canNuke && (
-              <div className="text-xs text-amber-300">
-                ☢ Armed — tap an enemy city in sight, within {NUKE_DELIVERY_RANGE} tiles, to send it.
-              </div>
-            )}
           </div>
         </div>
         <div className="mt-2 flex flex-wrap gap-2">
@@ -98,7 +93,9 @@ export default function SidePanel() {
             <ActionButton key={JSON.stringify(a)} action={a} />
           ))}
         </div>
-        {runs.length > 0 && <FirestormCompass unit={unit} runs={runs} />}
+        {unit.type === "bomber" && unit.ownerId === game.localSeat && (
+          <BomberPayloads unit={unit} canNuke={canNuke} runs={runs} />
+        )}
       </Panel>
     );
   }
@@ -261,6 +258,60 @@ function ActionButton({ action }: { action: Action }) {
   );
 }
 
+/**
+ * The two things a Bomber can carry, always both listed. A payload the plane
+ * cannot fly right now says why instead of quietly not being there — the tech
+ * it wants, the stars it wants, or that this plane has already flown today.
+ */
+function BomberPayloads({
+  unit,
+  canNuke,
+  runs,
+}: {
+  unit: Unit;
+  canNuke: boolean;
+  runs: Action[];
+}) {
+  const game = useGame();
+  const s = game.state!;
+  const player = s.players[unit.ownerId];
+  const spent = unit.attacked; // a plane trained this turn counts as spent too
+
+  const nuke = s.nukeLaunched
+    ? "Already flown — a game only ever has the one."
+    : !player.techs.includes("atomic_theory")
+      ? "Needs Atomic Theory (research it under Rocketry)."
+      : spent
+        ? "This plane's strike is spent — next turn."
+        : canNuke
+          ? `Armed — tap an enemy city within ${NUKE_DELIVERY_RANGE} tiles to send it.`
+          : `No enemy city in sight within ${NUKE_DELIVERY_RANGE} tiles. Fly closer.`;
+
+  const firestorm = !player.techs.includes("incendiaries")
+    ? "Needs Incendiaries (research it under Flight)."
+    : spent
+      ? "This plane's strike is spent — next turn."
+      : player.stars < FIRESTORM_COST
+        ? `Needs ⭐${FIRESTORM_COST} for the munitions.`
+        : null;
+
+  return (
+    <div className="mt-3 border-t border-white/10 pt-2">
+      <div className="mb-1 text-xs font-semibold uppercase text-white/50">Payloads</div>
+      <div className="text-xs text-white/60">
+        <span className="text-amber-300">☢ Nuke</span> — {nuke}
+      </div>
+      {firestorm ? (
+        <div className="mt-1 text-xs text-white/60">
+          <span className="text-orange-300">🔥 Firestorm (⭐{FIRESTORM_COST})</span> — {firestorm}
+        </div>
+      ) : (
+        <FirestormCompass unit={unit} runs={runs} />
+      )}
+    </div>
+  );
+}
+
 /** The eight headings, laid out as they sit around the plane on the compass. */
 const HEADINGS: Array<[number, number, string]> = [
   [-1, -1, "↖"], [0, -1, "↑"], [1, -1, "↗"],
@@ -278,7 +329,7 @@ function FirestormCompass({ unit, runs }: { unit: Unit; runs: Action[] }) {
     runs.map((r) => [r.type === "FIRESTORM" ? `${r.x - unit.x},${r.y - unit.y}` : "", r]),
   );
   return (
-    <div className="mt-3 flex items-start gap-3">
+    <div className="mt-1 flex items-start gap-3">
       <div className="grid w-[96px] shrink-0 grid-cols-3 gap-1">
         {HEADINGS.map(([dx, dy, glyph]) => {
           const run = byHeading.get(`${dx},${dy}`);
